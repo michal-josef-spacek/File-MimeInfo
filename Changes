@@ -1,9 +1,12 @@
 Revision history for Perl extension File::MimeInfo.
 
-0.01  Fri Jul 11 16:07:43 2003
+0.2   Sat Jul 12 2003
+	- bug fix for OO interface, forget to test the constructor :S
+	- added specified default behaviour
+
+0.1   Fri Jul 11 2003
 	- original version; created by h2xs 1.22 with options
 		-AX File::MMagic::Freedesktop
 	- implemented finding file type by glob folowing the
 	shared-mime-info-spec varsion 0.11
 	- decided to rename it File::MimeInfo because it is less cryptic
-

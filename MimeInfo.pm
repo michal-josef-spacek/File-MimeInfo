@@ -7,7 +7,7 @@ require Exporter;
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mimetype);
-our $VERSION = '0.1';
+our $VERSION = '0.2';
 
 our @DIRS;
 
@@ -27,14 +27,21 @@ our (@globs, %literal, %extension); # data hashes
 
 rehash(); # initialise data
 
-sub new { bless $VERSION, shift } # what else is there to bless ?
+sub new { bless \$VERSION, shift } # what else is there to bless ?
 
 sub mimetype {
 	my $file = pop;
 	my $recurs = pop;
 
-	(undef, undef, $file) = File::Spec->splitpath($file) unless $recurs;
-#	print "debug: Searching mimetype for '$file'\n";
+	my (undef, undef, $name) =  File::Spec->splitpath($file);
+
+	return	globs($name)
+		|| globs(lc($name))
+		|| default($file);
+}
+
+sub globs {
+	my $file = pop;
 
 	return $literal{$file} if exists $literal{$file};
 
@@ -59,9 +66,22 @@ sub mimetype {
 		return $_->[1];
 	}
 
-	return mimetype(++$recurs, lc($file)) unless $recurs || $file !~ /[A-Z]/;
-	# recursing for case insensitive version
 	return undef;
+}
+
+sub default {
+	my $file = pop;
+	return undef unless -f $file;
+	return 'text/plain' if -z $file;
+	
+	my $line;
+	open FILE, $file || return undef;
+	read FILE, $line, 10;
+	close FILE;
+
+	$line =~ s/\s//g; # \n and \t are also control chars
+	return 'text/plain' unless $line =~ /[\x00-\x1F\xF7]/;
+	return 'application/octet-stream';
 }
 
 sub dirs {
@@ -113,7 +133,7 @@ __END__
 
 =head1 NAME
 
-File::MimeInfo - Guess file type by extension
+File::MimeInfo - Determine file type
 
 =head1 SYNOPSIS
 
@@ -129,9 +149,8 @@ MIME database.
 For this module shared-mime-info-spec 0.11 and basedir-spec 0.5 where used.
 
 Currently only the globs file is used. No real magic checking is
-used. This is because the goal was to make a module that would
-share filetypes with I<rox>, the current I<rox> implementation also only
-uses globs.
+used. Although if the file exists and doesn't match any globs,
+the first line will be checked for ascii control chars.
 
 ( See L</SEE ALSO> for url's )
 
@@ -150,7 +169,17 @@ Simple constructor to allow Object Oriented use of this module.
 =item C<mimetype($file)>
 
 Returns a mime-type string for C<$file>, returns undef on failure.
-Since currently only globs are supported, the file doesn't need to exist.
+
+Currently only globs are supported, for this the file doesn't need to exist.
+When the globs don't match the file is read and the mime-type defaults
+to 'text/plain' or to 'application/octet-stream' when the first ten chars
+of the file match ascii control chars (white spaces excluded).
+If the file doesn't exist or isn't readable C<undef> is returned.
+
+=item C<globs($file)>
+
+Returns a mime-type string for C<$file> based on the glob rules, returns undef on failure. 
+C<$file> should be stripped of it's directory part, the file doesn't need to exist.
 
 =item C<dirs()>
 

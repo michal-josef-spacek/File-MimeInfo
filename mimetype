@@ -7,4 +7,8 @@ unless (@ARGV) {
 	exit;
 }
 
-for (@ARGV) { print $_, ': ', (mimetype($_) || 'UNKNOWN'), "\n" }
+for (@ARGV) { 
+	print $_, ': ';
+	print mimetype($_) || 'undef';
+	print "\n";
+}
