@@ -8,27 +8,31 @@ opendir MAGIC, 't/magic/';
 my @files = grep {$_ !~ /\./ and $_ ne 'CVS'} readdir MAGIC;
 closedir MAGIC;
 
-Test::More->import( tests => scalar(@files) + 1 );
+Test::More->import( tests => scalar(@files) );
 
-use File::MimeInfo::Magic;
+eval "use File::MimeInfo::Magic"; # force runtime evaluation
+die $@ if $@;
+
 unless (eval 'require IO::Scalar') {
 	ok(1, 'Skip - no IO::Scalar found') for 0 .. $#files;
-	goto IO_FILE;
+}
+else {
+	for (@files) {
+		my $type = $_;
+		$type =~ tr#_#/#;
+
+		open FILE, "t/magic/$_" || die $!;
+		my $file = join '', (<FILE>);
+		close FILE;
+		my $io = new IO::Scalar \$file;
+
+		ok( mimetype($io) eq $type, "typing of $_ as io::scalar" )
+	}
 }
 
-for (@files) {
-	my $type = $_;
-	$type =~ tr#_#/#;
+__END__
 
-	open FILE, "t/magic/$_" || die $!;
-	my $file = join '', (<FILE>);
-	close FILE;
-	my $io = new IO::Scalar \$file;
-
-	ok( mimetype($io) eq $type, "typing of $_ as io::scalar" )
-}
-
-IO_FILE:
+# Not all platforms seem to support <:encoding(latin2) :(
 
 unless (eval 'require IO::File') {
 	ok(1, 'Skip - no IO::File found');

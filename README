@@ -1,5 +1,5 @@
-File-MimeInfo version 0.9
-=========================
+File-MimeInfo version 0.10
+==========================
 
 This module can be used to determine the mime type of a file; it's a 
 replacement for File::MMagic trying to implement the freedesktop 
@@ -33,8 +33,6 @@ your system :
   Fcntl
   Pod::Usage
   File::BaseDir
-  IO::Scalar	# optional
-  IO::File	# optional
 
 COPYRIGHT AND LICENCE
 

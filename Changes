@@ -1,5 +1,10 @@
 Revision history for Perl extension File::MimeInfo.
 
+0.10  Sun Feb 08 2004
+      - Stripped down test for IO objects, because it doesn't seem to be platform
+      independent enough
+      - ++'ing  version number to keep CPAN satisfied
+
 0.9   Fri Dec 05 2003
       - Fixed magic() and default() to work on IO::something objects
 

@@ -9,7 +9,7 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(describe globs inodetype);
-our $VERSION = '0.9';
+our $VERSION = '0.10';
 our $DEBUG;
 
 our (@globs, %literal, %extension, $LANG);

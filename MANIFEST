@@ -22,4 +22,4 @@ t/mime/globs
 t/mime/magic
 t/mime/text/plain.xml
 t/text_plain_czech
-META.yml                                 Module meta-data (added by MakeMaker)
+META.yml
