@@ -29,7 +29,7 @@ sub mime_system { _do_mime('system', @_) }
 sub mime_exec   { _do_mime('exec',   @_) }
 
 sub _do_mime {
-	my ($act, $file, $mimet) = @_;
+	my ($act, $file, $mimet) = (shift, shift, shift);
 
 	$mimet ||= mimetype($file);
 	return undef unless $mimet;
@@ -40,8 +40,8 @@ sub _do_mime {
 
 	print "Going to $act: $script $file\n" if $DEBUG;
 	($act eq 'exec') 
-		? exec($script, $file) 
-		: (system($script, $file) == 0)
+		? exec($script, $file, @_)
+		: (system($script, $file, @_) == 0)
 			or croak "couldn't $act: $script $file";
 	42;
 }
@@ -129,7 +129,7 @@ C<$ENV{HOME}/Choices:/usr/local/share/Choices:/usr/share/Choices>
 
 =item C<mime_system($file)>
 
-=item C<mime_system($file, $mimetype)>
+=item C<mime_system($file, $mimetype, @_)>
 
 Try to open C<$file> with the appropriate program for files of
 it's mimetype. You can use C<$mimetype> to force the mimetype.
@@ -140,9 +140,11 @@ If either the mimetype couldn't be determinated or
 no appropriate program could be found C<undef> is returned.
 If the actual L<system> failes an exception is raised.
 
+All remaining arguments are passed on to the handler.
+
 =item C<mime_exec($file)>
 
-=item C<mime_exec($file, $mimetype)>
+=item C<mime_exec($file, $mimetype, @_)>
 
 Like C<mime_system()> but uses L<exec> instead of L<system>,
 so it B<never returns> if successful.
@@ -157,10 +159,7 @@ The suggested dir doesn't need to exist.
 
 =head1 BUGS
 
-Doesn't handle list of files like selections; not sure what would
-be the preferred way to handle these.
-
-Please mail the author when you encounter any other bugs.
+Please mail the author when you encounter any bugs.
 
 =head1 AUTHOR
 

@@ -2,13 +2,14 @@ package File::MimeInfo;
 
 use strict;
 use Carp;
+use Fcntl 'SEEK_SET';
 use File::BaseDir qw/xdg_data_files/;
 require Exporter;
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(describe globs inodetype);
-our $VERSION = '0.8';
+our $VERSION = '0.9';
 our $DEBUG;
 
 our (@globs, %literal, %extension, $LANG);
@@ -24,6 +25,7 @@ sub new { bless \$VERSION, shift } # what else is there to bless ?
 sub mimetype {
 	my $file = pop
 		|| croak 'subroutine "mimetype" needs a filename as argument';
+	croak 'You should use File::MimeInfo::Magic to check open filehandles' if ref $file;
 	return 
 		inodetype($file) ||
 		globs($file)	 ||
@@ -32,18 +34,18 @@ sub mimetype {
 
 sub inodetype {
 	my $file = pop;
-	return
-	(-d $file) ? 'inode/directory'   :
-	(-l $file) ? 'inode/symlink'     :
-	(-p $file) ? 'inode/fifo'        :
-	(-c $file) ? 'inode/chardevice'  :
-	(-b $file) ? 'inode/blockdevice' :
-	(-S $file) ? 'inode/socket'      : undef ;
+	print STDERR "> Checking inode type\n" if $DEBUG;
+	return	(-d $file) ? 'inode/directory'   :
+		(-l $file) ? 'inode/symlink'     :
+		(-p $file) ? 'inode/fifo'        :
+		(-c $file) ? 'inode/chardevice'  :
+		(-b $file) ? 'inode/blockdevice' :
+		(-S $file) ? 'inode/socket'      : undef ;
 }
 
 sub globs {
 	my $file = pop || croak 'subroutine "globs" needs a filename as argument';
-	print "> Checking globs for basename '$file'\n" if $DEBUG;
+	print STDERR "> Checking globs for basename '$file'\n" if $DEBUG;
 
 	return $literal{$file} if exists $literal{$file};
 
@@ -52,14 +54,14 @@ sub globs {
 		if ($#ext) {
 			while (@ext) {
 				my $ext = join('.', @ext);
-				print "> Checking for extension '.$ext'\n" if $DEBUG;
+				print STDERR "> Checking for extension '.$ext'\n" if $DEBUG;
 				return $extension{$ext}
 					if exists $extension{$ext};
 				shift @ext;
 			}
 		}
 		else {
-			print "> Checking for extension '.$ext[0]'\n" if $DEBUG;
+			print STDERR "> Checking for extension '.$ext[0]'\n" if $DEBUG;
 			return $extension{$ext[0]}
 				if exists $extension{$ext[0]};
 		}
@@ -67,7 +69,7 @@ sub globs {
 
 	for (@globs) {
 		next unless $file =~ $_->[1];
-		print "> This file name matches \"$_->[0]\"\n" if $DEBUG;
+		print STDERR "> This file name matches \"$_->[0]\"\n" if $DEBUG;
 		return $_->[2];
 	}
 
@@ -77,19 +79,31 @@ sub globs {
 
 sub default {
 	my $file = pop || croak 'subroutine "default" needs a filename as argument';
-	return undef unless -f $file;
-	print "> File exists, trying default method\n" if $DEBUG;
-	return 'text/plain' if -z $file;
 	
 	my $line;
-	open FILE, $file || return undef;
-	binmode FILE, ':utf8' unless $] < 5.008;
-	read FILE, $line, 10;
-	close FILE;
+	unless (ref $file) {
+		return undef unless -f $file;
+		print STDERR "> File exists, trying default method\n" if $DEBUG;
+		return 'text/plain' if -z $file;
+	
+		open FILE, $file || return undef;
+		binmode FILE, ':utf8' unless $] < 5.008;
+		read FILE, $line, 10;
+		close FILE;
+	}
+	else {
+		print STDERR "> Trying default method on object\n" if $DEBUG;
 
-	$line =~ s/\s//g; # \n and \t are also control chars
-	return 'text/plain' unless $line =~ /[\x00-\x1F\xF7]/;
-	print "> First 10 bytes of the file contain control chars\n" if $DEBUG;
+		$file->seek(0, SEEK_SET);
+		$file->read($line, 10);
+	}
+
+	{
+		no warnings; # warnings can be thrown when input is neither ascii or utf8
+		$line =~ s/\s//g; # \n and \t are also control chars
+		return 'text/plain' unless $line =~ /[\x00-\x1F\xF7]/;
+	}
+	print STDERR "> First 10 bytes of the file contain control chars\n" if $DEBUG;
 	return 'application/octet-stream';
 }
 
@@ -169,8 +183,11 @@ MIME database.
 
 For this module shared-mime-info-spec 0.12 was used.
 
-This packege only uses the globs file. No real magic checking is
+This package only uses the globs file. No real magic checking is
 used. The L<File::MimeInfo::Magic> package is provided for magic typing.
+
+If you want to detemine the mimetype of data in a memory buffer you should
+use L<File::MimeInfo::Magic> in combination with L<IO::Scalar>.
 
 =head1 EXPORT
 
@@ -248,6 +265,9 @@ Perl versions prior to 5.8.0 do not have the ':utf8' IO Layer, thus
 for the default method and for reading the xml files
 utf8 is not supported for these versions.
 
+Since it is not possible to distinguishe between encoding types (utf8, latin1, latin2 etc.)
+in a straightforward manner only utf8 is supported (because the spec recommends this).
+
 Please mail the author when you encounter any other bugs.
 
 =head1 AUTHOR
@@ -260,7 +280,9 @@ modify it under the same terms as Perl itself.
 
 =head1 SEE ALSO
 
-L<File::BaseDir>
+L<File::BaseDir>,
+L<File::MimeInfo::Magic>,
+L<File::MimeInfo::Rox>
 
 =over 4
 

@@ -1,5 +1,14 @@
 Revision history for Perl extension File::MimeInfo.
 
+0.9   Fri Dec 05 2003
+      - Fixed magic() and default() to work on IO::something objects
+
+      Fri Nov 28 2003
+      - Added a "no warnings" in the default routine to suppress warnings when
+      input is latin2 (thus neither ascii or utf8). Not sure whether this 
+      really fixes the problem but it at least ignores it.
+      The problem was reported by Daniel Raska.
+
 0.8   Wed Oct 22 2003
       Seems that the new version of the mime-info spec takes longer then
       I expected, so I decided to release last weeks bug fixes.

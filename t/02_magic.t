@@ -9,7 +9,7 @@ closedir MAGIC;
 
 Test::More->import( tests => (scalar(@files) + 1) );
 
-use_ok('File::MimeInfo::Magic', qw/magic/);
+use_ok('File::MimeInfo::Magic', qw/mimetype magic/);
 
 for (@files) {
 	$type = $_;

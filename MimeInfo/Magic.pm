@@ -18,7 +18,7 @@ BEGIN {
 our @ISA = qw(Exporter File::MimeInfo);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(describe globs inodetype magic);
-our $VERSION = '0.8';
+our $VERSION = '0.9';
 our $DEBUG;
 
 our (@magic); # used to store parse tree of magic data
@@ -31,6 +31,7 @@ _rehash(); # initialize data
 sub mimetype {
 	my $file = pop 
 		|| croak 'subroutine "mimetype" needs a filename as argument';
+	return magic($file) || default($file) if ref $file;
 	return
 		inodetype($file) ||
 		globs($file)     ||
@@ -40,19 +41,24 @@ sub mimetype {
 
 sub magic {
 	my $file = pop || croak 'subroutine "magic" needs a filename as argument';
-	return undef unless -s $file;
+	return undef unless ref($file) || -s $file;
+	print STDERR "> Checking magic rules\n" if $DEBUG;
 
-	open FILE, $file || return undef;
-	binmode FILE;
+	my $fh;
+	unless (ref $file) {
+		open $fh, $file || return undef;
+		binmode $fh;
+	}
+	else { $fh = $file } # allowing for IO::Something
 
 	for my $type (@magic) {
 		for (2..$#$type) {
-			next unless _check_rule($$type[$_], *FILE, 0);
-			close FILE;
+			next unless _check_rule($$type[$_], $fh, 0);
+			close $fh unless ref $file;
 			return $$type[1];
 		}
 	}
-	close FILE;
+	close $fh unless ref $file;
 	return undef;
 }
 
@@ -60,8 +66,14 @@ sub _check_rule {
 	my ($ref, $fh, $lev) = @_;
 	my $line;
 
-	sysseek($fh, $$ref[1][0], SEEK_SET);
-	sysread($fh, $line, $$ref[1][1]); 
+	if (ref $fh eq 'GLOB') {
+		seek($fh, $$ref[1][0], SEEK_SET);
+		read($fh, $line, $$ref[1][1]);
+	}
+	else { # allowing for IO::Something
+		$fh->seek($$ref[1][0], SEEK_SET);
+		$fh->read($line, $$ref[1][1]);
+	}
 	return undef unless $line =~ $$ref[2];
 
 	my $succes;
@@ -70,9 +82,9 @@ sub _check_rule {
 		my $v = $2 & $$ref[3][1];
 		$succes++ if $v eq $$ref[3][0];
 	}
-	print	'>', '>'x$lev, ' Value "', _escape_bytes($2),
-		'" at offset ', $$ref[1][0]+length($1),
-		" matches line $$ref[0]\n"
+	print STDERR	'>', '>'x$lev, ' Value "', _escape_bytes($2),
+			'" at offset ', $$ref[1][0]+length($1),
+			" matches line $$ref[0]\n"
 		if $succes && $DEBUG;
 
 	return undef unless $succes;
@@ -82,7 +94,7 @@ sub _check_rule {
 			last if $succes;
 		}
 	}
-	print "> Failed nested rules\n" if $DEBUG && !($lev || $succes);
+	print STDERR "> Failed nested rules\n" if $DEBUG && !($lev || $succes);
 	return $succes;
 }
 
@@ -202,10 +214,17 @@ to 'text/plain' or to 'application/octet-stream' when the first ten chars
 of the file match ascii control chars (white spaces excluded).
 If the file doesn't exist or isn't readable C<undef> is returned.
 
+If C<$file> is an object reference only C<magic> and the default method are used.
+
 =item C<magic($file)>
 
 Returns a mime-type string for C<$file> based on the magic rules, 
 returns undef on failure.
+
+C<$file> can be an object reference, in that case it is supposed to have a 
+C<seek()> and a C<read()> method. 
+This allows you for example to determine the mimetype of data in memory
+by using L<IO::Scalar>.
 
 =item C<rehash()>
 

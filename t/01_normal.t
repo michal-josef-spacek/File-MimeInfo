@@ -9,10 +9,13 @@ $ENV{XDG_DATA_DIRS} = './t/'; # forceing non default value
 use_ok('File::MimeInfo', qw/mimetype describe/); # 1
 
 # test what was read
-ok(scalar(keys %File::MimeInfo::extension) == 3, 'extension data is there');	# 2
-ok(scalar(keys %File::MimeInfo::literal) == 1, 'literal data is there');	# 3
-ok(scalar(@File::MimeInfo::globs) == 2, 'globs data is there');			# 4
-# deze laatste heeft twee dezelfde entries :(
+{
+	no warnings; # don't bug me because I use these vars only once
+	ok(scalar(keys %File::MimeInfo::extension) == 3, 'extension data is there');	# 2
+	ok(scalar(keys %File::MimeInfo::literal) == 1, 'literal data is there');	# 3
+	ok(scalar(@File::MimeInfo::globs) == 2, 'globs data is there');			# 4
+	# deze laatste heeft twee dezelfde entries :(
+}
 
 # test _glob_to_regexp
 my $i = 0;
@@ -54,6 +57,9 @@ ok( mimetype('t') eq 'inode/directory', 'directories are recognized'); # 25
 
 # test describe
 ok( describe('text/plain') eq 'Plain Text', 'describe works' ); # 26
-$File::MimeInfo::LANG = 'nl';
+{
+	no warnings; # don't bug me because I use this var only once
+	$File::MimeInfo::LANG = 'nl';
+}
 ok( describe('text/plain') eq 'Platte tekst', 'describe works with other languages' ); # 27
 
