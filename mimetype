@@ -266,7 +266,7 @@ is turned on automaticly when you call mimetype by a link
 called 'file'.
 
 A single '-' won't be considered a seperator
-between options and filenames anymore, but becomes identical to L</-s>.
+between options and filenames anymore, but becomes identical to L</--stdin>.
 ( You can still use '--' as seperator, but
 that is not backward compatible with the original file command. )
 Also the default becomes to print descriptions instead of mimetypes.
@@ -372,6 +372,8 @@ Compiled information about magic numbers.
 
 Descriptions of a mimetype in multiple languages, used for the
 L</--descibe> switch.
+
+=back
 
 =head1 DIAGNOSTICS
 

@@ -3,11 +3,13 @@ mimetype
 Changes
 MimeInfo.pm
 MimeInfo/Magic.pm
+MimeInfo/Rox.pm
 Makefile.PL
 MANIFEST
 README
 t/01_normal.t
 t/02_magic.t
+t/03_rox.t
 t/default/binary_file
 t/default/empty_file
 t/default/plain_text

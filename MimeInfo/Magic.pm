@@ -177,7 +177,7 @@ File::MimeInfo::Magic - Determine file type with magic
 
 =head1 DESCRIPTION
 
-This module inhereits from L<File::MimeInfo>, it is transparant
+This module inherits from L<File::MimeInfo>, it is transparant
 to its functions but adds support for the freedesktop magic file.
 
 =head1 EXPORT

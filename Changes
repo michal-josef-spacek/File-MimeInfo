@@ -1,5 +1,9 @@
 Revision history for Perl extension File::MimeInfo.
 
+0.7   Fri Oct 03 2003
+      - Added File::MimeInfo::Rox
+      - ++'ing  version number to keep CPAN satisfied
+
 0.6   Thu Sep 04 2003
       - Emergency release because of a bug in the magic test file
 
