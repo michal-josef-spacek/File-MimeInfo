@@ -1,10 +1,7 @@
 #!/usr/bin/perl
 
 use strict;
-use File::MimeInfo qw/mimetype describe/;
-
-our $VERSION = '0.3';
-
+our $VERSION = '0.4';
 $|++;
 
 # ########## #
@@ -16,16 +13,19 @@ my %opts = (
 	'help'		=> ['h'],
 	'usage'		=> ['u'],
 	'version'	=> ['v'],
-	'stdin'		=> ['s'],
+	'stdin'		=> [''],
 	'brief'		=> ['b'],
 	'namefile'	=> ['f', 1],
-	'noalign',	=> ['N'],
-	'describe',	=> ['d'],
+	'noalign'	=> ['N'],
+	'describe'	=> ['d'],
 	'file-compat'	=> [''],
 	'output-format'	=> ['', 1],
-	'language'	=> ['', 1],
+	'language'	=> ['l', 1],
 	'mimetype'	=> ['i'],
 	'dereference'	=> ['L'],
+	'separator'	=> ['F',1],
+	'debug'		=> ['D'],
+	'dir'		=> ['', 1],
 );
 
 $args{'file-compat'}++ if $0 =~ m#(^|/)file$#;
@@ -36,7 +36,7 @@ while ((@ARGV) && ($ARGV[0] =~ /^-/)) {
 		$args{stdin}++ if $args{'file-compat'} && $opt eq '-';
 		last;
 	}
-	elsif ($opt =~ s/^--([\w-]+)(?:=['"]?(.*)['"]?)?/$1/) {
+	elsif ($opt =~ s/^--([\w-]+)(?:=(.*))?/$1/) {
 		if (exists $opts{$opt}) {
 			if ($opts{$opt}[1]) { 
 				my $arg = $2 || shift @ARGV;
@@ -53,7 +53,8 @@ while ((@ARGV) && ($ARGV[0] =~ /^-/)) {
 			complain($o) unless $key;
 
 			if ($opts{$key}[1]) { 
-				my $arg = shift @ARGV || complain('--'.$opt, 2);
+				my $arg = shift @ARGV;
+				complain('-'.$o, 2) unless defined $arg;
 				$args{$key} .= ( $args{$key} ? ' ' : '' ).$arg; # join with whitespace
 			}
 			else { $args{$key}++; }
@@ -90,11 +91,26 @@ complain(undef, 4) unless scalar(@ARGV) || $args{stdin} || $args{namefile};
 # prepare stuff #
 # ############# #
 
-# compat moet al eerder in de parsing gehackt due to '-' for stdin
 die "TODO - read from stdin - need magic\n" if $args{stdin};
 
+# --debug
+if ($args{debug}) {
+	$File::MimeInfo::DEBUG++;
+	$File::MimeInfo::Magic::DEBUG++;
+	print "> Using data files from $File::MimeInfo::dir\n";
+}
+
+# --dir
+$File::MimeInfo::DIR = $args{dir} if $args{dir};
+
+## Actually use our module ##
+eval 'use File::MimeInfo::Magic qw/mimetype describe/;';
+die $@ if $@;
+
+# --file-compat
 $args{describe}++ if $args{'file-compat'} && !$args{mimetype};
 
+# --namfile
 if ($args{namefile}) {
 	open IN, $args{namefile} 
 		|| die "Couldn't open file: $args{namefile}\n";
@@ -102,15 +118,19 @@ if ($args{namefile}) {
 	close IN;
 }
 
+# --language
+$File::MimeInfo::LANG = $args{language} if $args{language};
+
+# Formatting stuff
 my $l;
 unless ($args{brief} || $args{noalign}) {
 	for (@ARGV) { $l = length($_) if $l < length($_) }
 }
 
-$File::MimeInfo::LANG = $args{language} if $args{language};
-
 my $format = $args{'output-format'} ? parse_format($args{'output-format'}) : undef;
+$args{separator} = ':' unless defined $args{separator};
 
+# --dereference
 if ($args{dereference}) {
 	eval 'use File::Spec';
 	die "Could not find perl module File::Spec\n" if $@;
@@ -120,19 +140,23 @@ if ($args{dereference}) {
 # do stuff #
 # ######## #
 
+our %desc; # desc caching hash
+
 foreach my $file (@ARGV) {
 	my $type;
 
+	# --dereference
 	if (-l $file && $args{dereference}) { $type = mimetype(resolvelink($file)) }
 	else {$type = mimetype($file) }
 
+	# Formatting
 	unless ($args{brief} || $format) {
-		print $file, ': ';
+		print $file, $args{separator}, ' ';
 		print ' 'x($l-length($file)) unless $args{noalign};
 	}
 
-	if    ($format)		{ print $format->($file, $type, describe($type)), "\n" }
-	elsif ($args{describe})	{ print describe($type), "\n" }
+	if    ($format)		{ print $format->($file, $type, desc($type)), "\n" }
+	elsif ($args{describe})	{ print desc($type), "\n" }
 	else			{ print $type, "\n" }
 }
 
@@ -140,7 +164,7 @@ foreach my $file (@ARGV) {
 # Subroutines #
 # ########### #
 
-sub complain {
+sub complain { # Error messages
 	my $opt = shift;
 	my $m = shift || 1;
 
@@ -155,7 +179,7 @@ sub complain {
 	exit $m;
 }
 
-sub parse_format {
+sub parse_format { # Advanced formatting
 	my $form = shift;
 	my $code = "sub { '$form' }";
 	# code will get @_ = qw/file type desc/
@@ -165,7 +189,7 @@ sub parse_format {
 	return eval $code;
 }
 
-sub resolvelink {
+sub resolvelink { # --dereference
 	my $file = shift;
 	my $link = readlink($file) || return $file;
 	my (undef, $dir, undef) = File::Spec->splitpath($file);
@@ -174,11 +198,16 @@ sub resolvelink {
 	return $link;
 }
 
+sub desc { # Cache desciption
+	return undef unless $_[0];
+	$desc{$_[0]} ||= describe($_[0]);
+}
+
 __END__
 
 =head1 NAME
 
-mimetype - determine file type
+mimetype - Determine file type
 
 =head1 SYNOPSIS
 
@@ -191,10 +220,14 @@ Shared MIME-info database. It is intended as a kind of I<file(1)> work-alike,
 but uses mimetypes instead of descriptions.
 
 If one symlinks the I<file> command to I<mimetype> it will behave
-a little more compatible, see L<--file-compat>.
+a little more compatible, see L</--file-compat>.
 Commandline options to specify alternative magic files are not
 implemented the same because of the conflicting data formats.
 Also the wording of the descriptions will differ.
+
+For naming switches I followed the manpage of file(1) version 4.02
+when possible. They seem to differ completely from the spec in the 
+'utilities' chapter of IEEE Std 1003.1-2001 (POSIX).
 
 =head1 OPTIONS
 
@@ -207,7 +240,16 @@ Do not prepend filenames to output lines (brief mode).
 =item B<-d>, B<--describe>
 
 Print file descriptions instead of mime types, this is the
-default when using L<--file-compat>.
+default when using L</--file-compat>.
+
+=item B<--dir>=I<mimedir>
+
+Force the program to look in 'mimedir' for the shared mime-info
+database.
+
+=item B<-D>, B<--debug>
+
+Print debug information about how the mimetype was determined.
 
 =item B<-f> I<namefile>, B<--namefile>=I<namefile>
 
@@ -221,10 +263,15 @@ is turned on automaticly when you call mimetype by a link
 called 'file'.
 
 A single '-' won't be considered a seperator
-between options and filenames anymore, but becomes identical to L<-s>.
+between options and filenames anymore, but becomes identical to L</-s>.
 ( You can still use '--' as seperator, but
 that is not backward compatible with the original file command. )
 Also the default becomes to print descriptions instead of mimetypes.
+
+=item B<-F> I<string>, B<--separator>=I<string>
+
+Use string as custom separator between the file name and its mimetype
+or description, defaults to ':' .
 
 =item B<-h>, B<--help>
 
@@ -234,14 +281,14 @@ Print a help message and exits.
 
 =item B<-i>, B<--mimetype>
 
-Use mime types, opposite to L<--describe>,
-this is the default when _not_ using L<--file-compat>.
+Use mime types, opposite to L</--describe>,
+this is the default when _not_ using L</--file-compat>.
 
 =item B<-L>, B<--dereference>
 
 Follow symbolic links.
 
-=item B<--language>=I<language>
+=item B<-l> I<code>, B<--language>=I<code>
 
 The language attribute specifies a two letter language code, this makes
 descriptions being outputted in the specified language.
@@ -262,9 +309,13 @@ containing the following escapes:
 Alignment is not available when using this,
 you need to post-process the output to do that.
 
-=item B<-s>, B<--stdin>
+=item B<--stdin>
 
-Determine type of content from STDIN.
+Determine type of content from STDIN, less powerfull then normal file checking
+because it only uses magic typing. This will happen also if the STDIN filehandle
+is a pipe.
+
+I<see TODO>
 
 =item B<-v>, B<--version>
 
@@ -274,21 +325,65 @@ Print the version of the program and exit.
 
 =head1 ENVIRONMENT
 
-See L<File::MimeInfo>.
+=over 4
+
+=item XDG_DATA_HOME
+
+=item XDG_DATA_DIRS
+
+These variables can list base directories to search for data files. The shared 
+mime-info will be expected in the "mime" sub directory of one of these
+directories. If these are not set, there will be searched for the 
+following directories:
+
+	$HOME/.local/share/mime
+	/usr/local/share/mime
+	/usr/share/mime
+
+See also the "XDG Base Directory Specification" 
+L<http://www.freedesktop.org/standards/basedir-spec/>
+
+=back
+
+=head1 FILES
+
+The base dir for all data files is determined by two environment variables,
+see L</ENVIRONMENT>.
+
+=over 4
+
+=item F<BASE/mime/packages/SOURCE.xml>
+
+All other files are compiled from these source files. To re-compile them
+use B<update-mime-database(1)>.
+
+=item F<BASE/mime/globs>
+
+Compiled information about globs.
+
+=item F<BASE/mime/magic>
+
+Compiled information about magic numbers.
+
+=item F<BASE/mime/MEDIA/SUBTYPE.xml>
+
+Descriptions of a mimetype in multiple languages, used for the
+L</--descibe> switch.
 
 =head1 DIAGNOSTICS
 
-If a file has an empty mimetype or an empty description, most probably the file doesn't
-exist and the given name doesn't match any globs. An empty description can also mean that
+If a file has an empty mimetype or an empty description,
+most probably the file doesn't exist and the given name 
+doesn't match any globs. An empty description can also mean that
 there is no description available in the language you specified.
 
-The program exits with a non-zero exit value if either the commandline arguments failed,
-a module it depends on wasn't found or the shared mime-info database wasn't accesable.
-See L<File::MimeInfo> for more details on this last case.
+The program exits with a non-zero exit value if either the commandline
+arguments failed, a module it depends on wasn't found or the shared
+mime-info database wasn't accesable. See L<File::MimeInfo> for more details.
 
 =head1 TODO
 
-Since L<File::MimeInfo> currently only uses globs and doesn't do any real magic parsing,
+Since the magic implementation currently only can handle seekable file handles
 reading from stdin wasn't implemented yet.
 
 =head1 BUGS

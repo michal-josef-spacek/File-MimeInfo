@@ -1,5 +1,14 @@
 Revision history for Perl extension File::MimeInfo.
 
+      Mon Aug 25 2003
+      - Added File::MimeInfo::Magic that inherits from File::MimeInfo but
+      also does use the freedesktop magic file
+      - Shifted some code around in File::MimeInfo to make inheriting easier
+      - Made the mimetype script work with Magic by default
+      - Added the --debug switch to trace why a certain file is typed the
+      way it is
+      - Updated and reviewed the documentation
+
 0.3   Sun Aug 24 2003
       - Moved file test operator stuff to a subroutine called inodetype()
       - Actually implemented the --file-compat switch

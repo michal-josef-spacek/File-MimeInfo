@@ -8,20 +8,21 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(describe globs inodetype);
-our $VERSION = '0.3';
+our $VERSION = '0.4';
+our $DEBUG;
 
 my $rootdir = File::Spec->rootdir();
 our @xdg_data_dirs = (
-	File::Spec->catdir($rootdir, qw/usr share/),
 	File::Spec->catdir($rootdir, qw/usr local share/),
+	File::Spec->catdir($rootdir, qw/usr share/),
 );
 our $xdg_data_home = $ENV{HOME}
 	? File::Spec->catdir($ENV{HOME}, qw/.local share/)
 	: undef ;
 
-our (@DIRS, @globs, %literal, %extension, $dir, $LANG);
-# @DIRS can be used to overload the search path used
-# @globs = [ [ qr//, $mime_string ], ... ]
+our ($DIR, @globs, %literal, %extension, $dir, $LANG);
+# $DIR can be used to overload the search path used
+# @globs = [ [ 'glob', qr//, $mime_string ], ... ]
 # %literal contains literal matches
 # %extension contains extensions (globs matching /^\*(\.\w)+$/ )
 # $dir is the dir used by last rehash
@@ -32,15 +33,11 @@ rehash(); # initialise data
 sub new { bless \$VERSION, shift } # what else is there to bless ?
 
 sub mimetype {
-	my $file = pop || croak 'subroutine "mimetype" needs a filename as argument';
-
-	my $type = inodetype($file);
-	return $type if $type;
-
-	my (undef, undef, $name) =  File::Spec->splitpath($file);
-
-	return	globs($name)	||
-		globs(lc $name)	||
+	my $file = pop
+		|| croak 'subroutine "mimetype" needs a filename as argument';
+	return 
+		inodetype($file) ||
+		globs($file)	 ||
 		default($file);
 }
 
@@ -57,6 +54,8 @@ sub inodetype {
 
 sub globs {
 	my $file = pop || croak 'subroutine "globs" needs a filename as argument';
+	(undef, undef, $file) =  File::Spec->splitpath($file);
+	print "> Checking globs for basename '$file'\n" if $DEBUG;
 
 	return $literal{$file} if exists $literal{$file};
 
@@ -65,28 +64,33 @@ sub globs {
 		if ($#ext) {
 			while (@ext) {
 				my $ext = join('.', @ext);
+				print "> Checking for extension '.$ext'\n" if $DEBUG;
 				return $extension{$ext}
 					if exists $extension{$ext};
 				shift @ext;
 			}
 		}
 		else {
+			print "> Checking for extension '.$ext[0]'\n" if $DEBUG;
 			return $extension{$ext[0]}
 				if exists $extension{$ext[0]};
 		}
 	}
 
 	for (@globs) {
-		next unless $file =~ $_->[0];
-		return $_->[1];
+		next unless $file =~ $_->[1];
+		print "> This file name matches \"$_->[0]\"\n" if $DEBUG;
+		return $_->[2];
 	}
 
+	return globs(lc $file) if $file =~ /[A-Z]/; # recurs
 	return undef;
 }
 
 sub default {
 	my $file = pop || croak 'subroutine "default" needs a filename as argument';
 	return undef unless -f $file;
+	print "> File exists, trying default method\n" if $DEBUG;
 	return 'text/plain' if -z $file;
 	
 	my $line;
@@ -97,43 +101,45 @@ sub default {
 
 	$line =~ s/\s//g; # \n and \t are also control chars
 	return 'text/plain' unless $line =~ /[\x00-\x1F\xF7]/;
+	print "> First 10 bytes of the file contain control chars\n" if $DEBUG;
 	return 'application/octet-stream';
 }
 
-sub dirs {
-	return @DIRS if @DIRS;
-	my @dirs = 
-		$ENV{XDG_DATA_DIRS}
-		? reverse(split ':', $ENV{XDG_DATA_DIRS})
-		: @xdg_data_dirs;
+sub _find_dir {
+	return $dir = $DIR if $DIR;
 
-	push @dirs, $ENV{XDG_DATA_HOME} || $xdg_data_home;
+	for my $d (
+		($ENV{XDG_DATA_HOME} || $xdg_data_home),
+		( $ENV{XDG_DATA_DIRS}
+			? split(':', $ENV{XDG_DATA_DIRS})
+			: @xdg_data_dirs
+		)
+	) {
+		next unless -f File::Spec->catfile($d, qw/mime globs/);
+		$dir = File::Spec->catdir($d, q/mime/);
+		last
+	}
 
-	return @dirs;
+	croak "You don't seem to have a mime-info database." unless $dir;
+	return $dir;
 }
 
 sub rehash {
 	(@globs, %literal, %extension) = ((), (), ()); # clear data
 	my $success = 0;
-	for ( dirs() ) {
-		my $file = File::Spec->catfile($_, qw/mime globs/);
-		next unless -f $file;
-		$dir = File::Spec->catdir($_, qw/mime/);
-#		print "debug: Going to read '$file'\n";
-		open MIME, $file || croak "Could not open file '$file' for reading" ;
-		my ($string, $glob);
-		while (<MIME>) {
-			next if /^\s*#/; # skip comments
-			chomp;
-			($string, $glob) = split /:/, $_, 2;
-			unless ($glob =~ /[\?\*\[]/) { $literal{$glob} = $string }
-			elsif ($glob =~ /^\*\.(\w+(\.\w+)*)$/) { $extension{$1} = $string }
-			else { unshift @globs, [_glob_to_regexp($glob), $string] }
-		}
-		close MIME;
-		$success++;
+	&_find_dir;
+	my $file = File::Spec->catfile($dir, q/globs/);
+	open MIME, $file || croak "Could not open file '$file' for reading" ;
+	my ($string, $glob);
+	while (<MIME>) {
+		next if /^\s*#/; # skip comments
+		chomp;
+		($string, $glob) = split /:/, $_, 2;
+		unless ($glob =~ /[\?\*\[]/) { $literal{$glob} = $string }
+		elsif ($glob =~ /^\*\.(\w+(\.\w+)*)$/) { $extension{$1} = $string }
+		else { unshift @globs, [$glob, _glob_to_regexp($glob), $string] }
 	}
-	croak "You don't seem to have any mime info files." unless $success;
+	close MIME || croak "Could not open file '$file' for reading" ;
 }
 
 sub _glob_to_regexp {
@@ -182,11 +188,8 @@ MIME database.
 
 For this module shared-mime-info-spec 0.11 and basedir-spec 0.5 where used.
 
-Currently only the globs file is used. No real magic checking is
-used. Although if the file exists and doesn't match any globs,
-the first line will be checked for ascii control chars.
-
-( See L</SEE ALSO> for url's )
+This packege only uses the globs file. No real magic checking is
+used. The L<File::MimeInfo::Magic> package is provided for magic typing.
 
 =head1 EXPORT
 
@@ -207,11 +210,13 @@ to avoid importing sub C<mimetype>.
 
 Returns a mime-type string for C<$file>, returns undef on failure.
 
-Currently only globs are supported, for this the file doesn't need to exist.
-When the globs don't match the file is read and the mime-type defaults
+This method bundles C<inodetype> and C<globs>.
+
+If this doesn't work the file is read and the mime-type defaults
 to 'text/plain' or to 'application/octet-stream' when the first ten chars
 of the file match ascii control chars (white spaces excluded).
 If the file doesn't exist or isn't readable C<undef> is returned.
+Returns a mime-type string for C<$file>, returns undef on failure.
 
 =item C<inodetype($file)>
 
@@ -220,8 +225,8 @@ actually a normal file.
 
 =item C<globs($file)>
 
-Returns a mime-type string for C<$file> based on the glob rules, returns undef on failure. 
-C<$file> should be stripped of it's directory part, the file doesn't need to exist.
+Returns a mime-type string for C<$file> based on the glob rules, returns undef on
+failure. The file doesn't need to exist.
 
 =item C<describe($mimetype)>
 
@@ -232,16 +237,6 @@ there seems to be no xml file for this mimetype, this could very well mean the
 mimetype doesn't exist, it could also mean that the language you specified wasn't found.
 
 I<Currently no real xml parsing is done, it trust the xml files are nicely formatted.>
-
-=item C<dirs()>
-
-Lists all directories that would be scanned when rehashing, they don't need
-to exist or need have a "mime" subdir.
-
-The default behaviour can be overloaded by setting global variable C<@File::MimeInfo::DIRS>,
-this is mainly used for testing purposes.
-
-I<It lists the least important dir first.>
 
 =item C<rehash()>
 
@@ -275,7 +270,9 @@ The directories in C<$XDG_DATA_DIRS> should be seperated with a colon ':'.
 If C<$XDG_DATA_DIRS> is either not set or empty, a value equal 
 to C</usr/local/share/:/usr/share/> should is used.
 
-Mime data could be found in the "mime" subdirs of these dirs.
+Mime data should be found in the "mime" subdir of one
+of these dirs. The dir that should be used can be hardcoded with the
+variable C<$File::MimeInfo::DIR>, this is used for testing purposes.
 
 =back
 
@@ -301,7 +298,7 @@ in the second case you have the database installed, but it is broken
 
 Make an option for using some caching mechanism to reduce init time.
 
-Make L<describe> do real xml parsing?
+Make L</describe> do real xml parsing?
 
 =head1 BUGS
 
@@ -316,6 +313,8 @@ This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
 =head1 SEE ALSO
+
+L<File::MimeInfo::Magic>
 
 =over 4
 

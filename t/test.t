@@ -3,7 +3,7 @@ use strict;
 
 use Test::More tests => 27;
 
-@File::MimeInfo::DIRS = './t';
+$File::MimeInfo::DIR = './t/mime';
 
 use_ok('File::MimeInfo', qw/mimetype describe/); # 1
 

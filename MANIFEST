@@ -2,6 +2,7 @@ configure
 mimetype
 Changes
 MimeInfo.pm
+MimeInfo/Magic.pm
 Makefile.PL
 MANIFEST
 README

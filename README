@@ -1,10 +1,11 @@
-File-MimeInfo version 0.3
+File-MimeInfo version 0.4
 =========================
 
-This module can be used to determine the mime type of a file. It
-tries to implement the freedesktop specification for a shared
-MIME database. It comes with a frontend script that can be used
-as a file(1) work-alike.
+This module can be used to determine the mime type of a file; it's a 
+replacement for File::MMagic trying to implement the freedesktop 
+specification for using the shared mime-info database. The package
+comes with a script called 'mimetype' that can be used as a file(1)
+work-alike.
 
 INSTALLATION
 
@@ -18,21 +19,24 @@ To install this module type the following:
 DEPENDENCIES
 
 This module expects the freedesktop mime database to be installed,
-it can be obtained from :
+some linux distrobutions include it, otherwise it can obtained 
+from :
 
   http://www.freedesktop.org/software/shared-mime-info/
 
-This module requires these other modules:
+This module requires these other modules which can be obtained from
+the CPAN <http://cpan.org> if they are not allready installed on
+your system :
 
   Carp
   Exporter
+  Fcntl
   File::Spec
   Pod::Usage
-
-They can be obtained from CPAN.
 
 COPYRIGHT AND LICENCE
 
 Copyright (c) 2003 Jaap G Karssenberg. All rights reserved.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
+
