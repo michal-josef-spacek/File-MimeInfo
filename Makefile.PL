@@ -7,8 +7,9 @@ WriteMakefile(
 	'PREREQ_PM'	=> {
 		'Carp'		=> 0,
 		'Exporter'	=> 0,
-		'File::Spec'	=> 0,
+		'Fcntl'		=> 0,
 		'Pod::Usage'	=> 0,
+		'File::BaseDir'	=> 0,
 	},
 	($] >= 5.005
     		? (AUTHOR => 'Jaap Karssenberg <pardus@cpan.org>')

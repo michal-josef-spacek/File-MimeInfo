@@ -4,7 +4,7 @@ package File::MimeInfo::Magic;
 use strict;
 use Carp;
 use Fcntl 'SEEK_SET';
-require File::Spec;
+use File::BaseDir qw/xdg_data_files/;
 require File::MimeInfo;
 require Exporter;
 
@@ -18,7 +18,7 @@ BEGIN {
 our @ISA = qw(Exporter File::MimeInfo);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(describe globs inodetype magic);
-our $VERSION = '0.4';
+our $VERSION = '0.5';
 our $DEBUG;
 
 our (@magic); # used to store parse tree of magic data
@@ -46,10 +46,10 @@ sub magic {
 	binmode FILE;
 
 	for my $type (@magic) {
-		for (1..$#$type) {
+		for (2..$#$type) {
 			next unless _check_rule($$type[$_], *FILE, 0);
 			close FILE;
-			return $$type[0];
+			return $$type[1];
 		}
 	}
 	close FILE;
@@ -92,8 +92,14 @@ sub rehash {
 }
 
 sub _rehash {
-	my $file = File::Spec->catfile($File::MimeInfo::dir, 'magic');
-	croak "Couldn't find the magic file '$file'" unless -f $file;
+	@magic = ();
+	_hash_magic($_) for reverse xdg_data_files('mime/magic');
+	@magic = sort {$$b[0] <=> $$a[0]} @magic;
+}
+
+sub _hash_magic {
+	my $file = shift;
+
 	open MAGIC, $file || croak "Could not open file '$file' for reading";
 	binmode MAGIC;
 	<MAGIC> eq "MIME-Magic\x00\n"
@@ -103,8 +109,8 @@ sub _rehash {
 	while (<MAGIC>) { 
 		$line++;
 
-		if (/^\[\d+:(.*?)\]\n$/) {
-			push @magic, [$1];
+		if (/^\[(\d+):(.*?)\]\n$/) {
+			push @magic, [$1,$2];
 			next;
 		}
 
@@ -223,7 +229,7 @@ of configurations that can cause problems.
 
 =head1 AUTHOR
 
-Jaap Karssenberg || Pardus [Larus] E<lt>pardus@cpan.org<gt>
+Jaap Karssenberg || Pardus [Larus] E<lt>pardus@cpan.orgE<gt>
 
 Copyright (c) 2003 Jaap G Karssenberg. All rights reserved.
 This program is free software; you can redistribute it and/or

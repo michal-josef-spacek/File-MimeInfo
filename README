@@ -1,4 +1,4 @@
-File-MimeInfo version 0.4
+File-MimeInfo version 0.5
 =========================
 
 This module can be used to determine the mime type of a file; it's a 
@@ -31,8 +31,8 @@ your system :
   Carp
   Exporter
   Fcntl
-  File::Spec
   Pod::Usage
+  File::BaseDir
 
 COPYRIGHT AND LICENCE
 

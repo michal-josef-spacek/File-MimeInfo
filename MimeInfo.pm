@@ -2,30 +2,19 @@ package File::MimeInfo;
 
 use strict;
 use Carp;
-use File::Spec;
+use File::BaseDir qw/xdg_data_files/;
 require Exporter;
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(describe globs inodetype);
-our $VERSION = '0.4';
+our $VERSION = '0.5';
 our $DEBUG;
 
-my $rootdir = File::Spec->rootdir();
-our @xdg_data_dirs = (
-	File::Spec->catdir($rootdir, qw/usr local share/),
-	File::Spec->catdir($rootdir, qw/usr share/),
-);
-our $xdg_data_home = $ENV{HOME}
-	? File::Spec->catdir($ENV{HOME}, qw/.local share/)
-	: undef ;
-
-our ($DIR, @globs, %literal, %extension, $dir, $LANG);
-# $DIR can be used to overload the search path used
+our (@globs, %literal, %extension, $LANG);
 # @globs = [ [ 'glob', qr//, $mime_string ], ... ]
 # %literal contains literal matches
 # %extension contains extensions (globs matching /^\*(\.\w)+$/ )
-# $dir is the dir used by last rehash
 # $LANG can be used to set a default language for the comments
 
 rehash(); # initialise data
@@ -54,7 +43,6 @@ sub inodetype {
 
 sub globs {
 	my $file = pop || croak 'subroutine "globs" needs a filename as argument';
-	(undef, undef, $file) =  File::Spec->splitpath($file);
 	print "> Checking globs for basename '$file'\n" if $DEBUG;
 
 	return $literal{$file} if exists $literal{$file};
@@ -95,7 +83,7 @@ sub default {
 	
 	my $line;
 	open FILE, $file || return undef;
-	binmode FILE, ':utf8';
+	binmode FILE, ':utf8' unless $] < 5.008;
 	read FILE, $line, 10;
 	close FILE;
 
@@ -105,33 +93,21 @@ sub default {
 	return 'application/octet-stream';
 }
 
-sub _find_dir {
-	return $dir = $DIR if $DIR;
-
-	for my $d (
-		($ENV{XDG_DATA_HOME} || $xdg_data_home),
-		( $ENV{XDG_DATA_DIRS}
-			? split(':', $ENV{XDG_DATA_DIRS})
-			: @xdg_data_dirs
-		)
-	) {
-		next unless -f File::Spec->catfile($d, qw/mime globs/);
-		$dir = File::Spec->catdir($d, q/mime/);
-		last
-	}
-
-	croak "You don't seem to have a mime-info database." unless $dir;
-	return $dir;
-}
-
 sub rehash {
 	(@globs, %literal, %extension) = ((), (), ()); # clear data
-	my $success = 0;
-	&_find_dir;
-	my $file = File::Spec->catfile($dir, q/globs/);
-	open MIME, $file || croak "Could not open file '$file' for reading" ;
+	my $done;
+	++$done && _hash_globs($_) for reverse xdg_data_files('mime/globs');
+	print STDERR << 'EOE' unless $done;
+You don't seem to have a mime-info database.
+See http://www.freedesktop.org/software/shared-mime-info/
+EOE
+}
+
+sub _hash_globs {
+	my $file = shift;
+	open GLOB, $file || croak "Could not open file '$file' for reading" ;
 	my ($string, $glob);
-	while (<MIME>) {
+	while (<GLOB>) {
 		next if /^\s*#/; # skip comments
 		chomp;
 		($string, $glob) = split /:/, $_, 2;
@@ -139,7 +115,7 @@ sub rehash {
 		elsif ($glob =~ /^\*\.(\w+(\.\w+)*)$/) { $extension{$1} = $string }
 		else { unshift @globs, [$glob, _glob_to_regexp($glob), $string] }
 	}
-	close MIME || croak "Could not open file '$file' for reading" ;
+	close GLOB || croak "Could not open file '$file' for reading" ;
 }
 
 sub _glob_to_regexp {
@@ -152,18 +128,19 @@ sub _glob_to_regexp {
 
 sub describe {
 	my $mt = pop || croak 'subroutine "describe" needs a mimetype as argument';
-	my $file = File::Spec->catfile($dir, split '/', "$mt.xml");
-	return undef unless -e $file;
 	my $att =  $LANG ? qq{xml:lang="$LANG"} : '';
-	open XML, $file || croak "Could not open file '$file' for reading";
-	binmode XML, ':utf8';
 	my $desc;
-	while (<XML>) {
-		next unless m!<comment\s*$att>(.*?)</comment>!;
-		$desc = $1;
-		last;
+	for my $file (xdg_data_files('mime', split '/', "$mt.xml")) {
+		open XML, $file || croak "Could not open file '$file' for reading";
+		binmode XML, ':utf8' unless $] < 5.008;
+		while (<XML>) {
+			next unless m!<comment\s*$att>(.*?)</comment>!;
+			$desc = $1;
+			last;
+		}
+		close XML || croak "Could not open file '$file' for reading";
+		last if $desc;
 	}
-	close XML;
 	return $desc;
 }
 
@@ -186,7 +163,7 @@ This module can be used to determine the mime type of a file. It
 tries to implement the freedesktop specification for a shared
 MIME database.
 
-For this module shared-mime-info-spec 0.11 and basedir-spec 0.5 where used.
+For this module shared-mime-info-spec 0.12 was used.
 
 This packege only uses the globs file. No real magic checking is
 used. The L<File::MimeInfo::Magic> package is provided for magic typing.
@@ -212,11 +189,10 @@ Returns a mime-type string for C<$file>, returns undef on failure.
 
 This method bundles C<inodetype> and C<globs>.
 
-If this doesn't work the file is read and the mime-type defaults
+If these methods are unsuccessfull the file is read and the mime-type defaults
 to 'text/plain' or to 'application/octet-stream' when the first ten chars
 of the file match ascii control chars (white spaces excluded).
 If the file doesn't exist or isn't readable C<undef> is returned.
-Returns a mime-type string for C<$file>, returns undef on failure.
 
 =item C<inodetype($file)>
 
@@ -244,47 +220,6 @@ Rehash the data files. Glob information is preparsed when this method is called.
 
 =back
 
-=head1 ENVIRONMENT
-
-This module uses the following two environment variables when looking for
-available data file.
-
-I<Quoting basedir-spec 0.5 :>
-
-=over 4
-
-=item XDG_DATA_HOME
-
-Defines the base directory relative to which user specific data files 
-should be stored.
-If C<$XDG_DATA_HOME> is either not set or empty,
-a default equal to C<$HOME/.local/share> is used.
-
-Mime data could be found in C<$XDG_DATA_HOME/mime>.
-
-=item XDG_DATA_DIRS
-
-Defines the preference-ordered set of base directories to search for data 
-files in addition to the C<$XDG_DATA_HOME> base directory. 
-The directories in C<$XDG_DATA_DIRS> should be seperated with a colon ':'.
-If C<$XDG_DATA_DIRS> is either not set or empty, a value equal 
-to C</usr/local/share/:/usr/share/> should is used.
-
-Mime data should be found in the "mime" subdir of one
-of these dirs. The dir that should be used can be hardcoded with the
-variable C<$File::MimeInfo::DIR>, this is used for testing purposes.
-
-=back
-
-The order of base directories denotes their importance; 
-the first directory listed is the most important. 
-When the same information is defined in multiple places 
-the information defined relative to the more 
-important base directory takes precedent. 
-The base directory defined by C<$XDG_DATA_HOME> 
-is considered more important than any of the base 
-directories defined by C<$XDG_DATA_DIRS>.
-
 =head1 DIAGNOSTICS
 
 This module throws an exception when it can't find any data files, when it can't
@@ -298,15 +233,21 @@ in the second case you have the database installed, but it is broken
 
 Make an option for using some caching mechanism to reduce init time.
 
-Make L</describe> do real xml parsing?
+Make L</describe> do real xml parsing ?
+
+Make Base Dir Spec stuff separate module ?
 
 =head1 BUGS
 
-Non I know of, please mail me when you encounter one.
+Perl versions prior to 5.8.0 do not have the ':utf8' IO Layer, thus
+for the default method and for reading the xml files
+utf8 is not supported for these versions.
+
+Please mail the author when you encounter any other bugs.
 
 =head1 AUTHOR
 
-Jaap Karssenberg || Pardus [Larus] E<lt>pardus@cpan.org<gt>
+Jaap Karssenberg || Pardus [Larus] E<lt>pardus@cpan.orgE<gt>
 
 Copyright (c) 2003 Jaap G Karssenberg. All rights reserved.
 This program is free software; you can redistribute it and/or
@@ -314,7 +255,7 @@ modify it under the same terms as Perl itself.
 
 =head1 SEE ALSO
 
-L<File::MimeInfo::Magic>
+L<File::BaseDir>
 
 =over 4
 

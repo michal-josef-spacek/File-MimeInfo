@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 use strict;
-our $VERSION = '0.4';
+our $VERSION = '0.5';
 $|++;
 
 # ########## #
@@ -93,19 +93,22 @@ complain(undef, 4) unless scalar(@ARGV) || $args{stdin} || $args{namefile};
 
 die "TODO - read from stdin - need magic\n" if $args{stdin};
 
-# --debug
-if ($args{debug}) {
-	$File::MimeInfo::DEBUG++;
-	$File::MimeInfo::Magic::DEBUG++;
-	print "> Using data files from $File::MimeInfo::dir\n";
-}
-
 # --dir
 $File::MimeInfo::DIR = $args{dir} if $args{dir};
 
 ## Actually use our module ##
 eval 'use File::MimeInfo::Magic qw/mimetype describe/;';
 die $@ if $@;
+
+# --debug
+if ($args{debug}) {
+	$File::MimeInfo::DEBUG++;
+	$File::MimeInfo::Magic::DEBUG++;
+	print	'> Data dirs are: ', join( ', ', 
+			File::BaseDir::xdg_data_home(),
+			File::BaseDir::xdg_data_dirs()
+		), "\n";
+}
 
 # --file-compat
 $args{describe}++ if $args{'file-compat'} && !$args{mimetype};

@@ -1,5 +1,17 @@
 Revision history for Perl extension File::MimeInfo.
 
+0.5   Wed Sep 03 2003
+      - added tests for magic typing
+      - fixed design mistake in the basedir file search
+      all xdg data dirs are now used, not only the first one found
+      - put basedir code in a separate package called File::BaseDir
+
+      Mon Sep 01 2003
+      - disabled utf8 binmode layer for perl versions prior to 5.8.0
+
+0.4   Wed Aug 27 2003
+      - Added the --dir switch.
+
       Mon Aug 25 2003
       - Added File::MimeInfo::Magic that inherits from File::MimeInfo but
       also does use the freedesktop magic file
