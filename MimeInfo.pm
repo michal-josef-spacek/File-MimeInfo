@@ -7,9 +7,8 @@ require Exporter;
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mimetype);
-our $VERSION = '0.2';
-
-our @DIRS;
+our @EXPORT_OK = qw(describe globs inodetype);
+our $VERSION = '0.3';
 
 my $rootdir = File::Spec->rootdir();
 our @xdg_data_dirs = (
@@ -20,28 +19,44 @@ our $xdg_data_home = $ENV{HOME}
 	? File::Spec->catdir($ENV{HOME}, qw/.local share/)
 	: undef ;
 
-our (@globs, %literal, %extension); # data hashes
+our (@DIRS, @globs, %literal, %extension, $dir, $LANG);
+# @DIRS can be used to overload the search path used
 # @globs = [ [ qr//, $mime_string ], ... ]
 # %literal contains literal matches
 # %extension contains extensions (globs matching /^\*(\.\w)+$/ )
+# $dir is the dir used by last rehash
+# $LANG can be used to set a default language for the comments
 
 rehash(); # initialise data
 
 sub new { bless \$VERSION, shift } # what else is there to bless ?
 
 sub mimetype {
-	my $file = pop;
-	my $recurs = pop;
+	my $file = pop || croak 'subroutine "mimetype" needs a filename as argument';
+
+	my $type = inodetype($file);
+	return $type if $type;
 
 	my (undef, undef, $name) =  File::Spec->splitpath($file);
 
-	return	globs($name)
-		|| globs(lc($name))
-		|| default($file);
+	return	globs($name)	||
+		globs(lc $name)	||
+		default($file);
+}
+
+sub inodetype {
+	my $file = pop;
+	return
+	(-d $file) ? 'inode/directory'   :
+	(-l $file) ? 'inode/symlink'     :
+	(-p $file) ? 'inode/fifo'        :
+	(-c $file) ? 'inode/chardevice'  :
+	(-b $file) ? 'inode/blockdevice' :
+	(-S $file) ? 'inode/socket'      : undef ;
 }
 
 sub globs {
-	my $file = pop;
+	my $file = pop || croak 'subroutine "globs" needs a filename as argument';
 
 	return $literal{$file} if exists $literal{$file};
 
@@ -70,12 +85,13 @@ sub globs {
 }
 
 sub default {
-	my $file = pop;
+	my $file = pop || croak 'subroutine "default" needs a filename as argument';
 	return undef unless -f $file;
 	return 'text/plain' if -z $file;
 	
 	my $line;
 	open FILE, $file || return undef;
+	binmode FILE, ':utf8';
 	read FILE, $line, 10;
 	close FILE;
 
@@ -102,6 +118,7 @@ sub rehash {
 	for ( dirs() ) {
 		my $file = File::Spec->catfile($_, qw/mime globs/);
 		next unless -f $file;
+		$dir = File::Spec->catdir($_, qw/mime/);
 #		print "debug: Going to read '$file'\n";
 		open MIME, $file || croak "Could not open file '$file' for reading" ;
 		my ($string, $glob);
@@ -116,7 +133,7 @@ sub rehash {
 		close MIME;
 		$success++;
 	}
-	carp "You don't seem to have any mime info files." unless $success;
+	croak "You don't seem to have any mime info files." unless $success;
 }
 
 sub _glob_to_regexp {
@@ -125,6 +142,23 @@ sub _glob_to_regexp {
 	$glob =~ s/([?*])/.$1/g;
 	$glob =~ s/([^\w\/\\\.\?\*\[\]])/\\$1/g;
 	qr/^$glob$/;
+}
+
+sub describe {
+	my $mt = pop || croak 'subroutine "describe" needs a mimetype as argument';
+	my $file = File::Spec->catfile($dir, split '/', "$mt.xml");
+	return undef unless -e $file;
+	my $att =  $LANG ? qq{xml:lang="$LANG"} : '';
+	open XML, $file || croak "Could not open file '$file' for reading";
+	binmode XML, ':utf8';
+	my $desc;
+	while (<XML>) {
+		next unless m!<comment\s*$att>(.*?)</comment>!;
+		$desc = $1;
+		last;
+	}
+	close XML;
+	return $desc;
 }
 
 1;
@@ -157,6 +191,7 @@ the first line will be checked for ascii control chars.
 =head1 EXPORT
 
 The method C<mimetype> is exported by default.
+The methods C<inodetype>, C<globs> and C<describe> can be exported on demand.
 
 =head1 METHODS
 
@@ -165,6 +200,8 @@ The method C<mimetype> is exported by default.
 =item C<new()>
 
 Simple constructor to allow Object Oriented use of this module.
+If you want to use this, use the package as C<use File::MimeInfo ();>
+to avoid importing sub C<mimetype>.
 
 =item C<mimetype($file)>
 
@@ -176,24 +213,39 @@ to 'text/plain' or to 'application/octet-stream' when the first ten chars
 of the file match ascii control chars (white spaces excluded).
 If the file doesn't exist or isn't readable C<undef> is returned.
 
+=item C<inodetype($file)>
+
+Returns a mimetype in the 'inode' namespace or undef when the file is 
+actually a normal file.
+
 =item C<globs($file)>
 
 Returns a mime-type string for C<$file> based on the glob rules, returns undef on failure. 
 C<$file> should be stripped of it's directory part, the file doesn't need to exist.
+
+=item C<describe($mimetype)>
+
+Returns a description of this mimetype as supplied by the mime info database.
+You can set the global variable C<$File::MimeInfo::LANG> to specify a language,
+this should be the two letter language code used in the xml files. Returns undef when 
+there seems to be no xml file for this mimetype, this could very well mean the 
+mimetype doesn't exist, it could also mean that the language you specified wasn't found.
+
+I<Currently no real xml parsing is done, it trust the xml files are nicely formatted.>
 
 =item C<dirs()>
 
 Lists all directories that would be scanned when rehashing, they don't need
 to exist or need have a "mime" subdir.
 
-The default behaviour can be overloaded by setting global variable C<@DIRS>,
+The default behaviour can be overloaded by setting global variable C<@File::MimeInfo::DIRS>,
 this is mainly used for testing purposes.
 
 I<It lists the least important dir first.>
 
 =item C<rehash()>
 
-Rehash the data files. Glob information is preparsed
+Rehash the data files. Glob information is preparsed when this method is called.
 
 =back
 
@@ -238,18 +290,26 @@ directories defined by C<$XDG_DATA_DIRS>.
 
 =head1 DIAGNOSTICS
 
-This module throws a warning if it couldn't find any data files.
-This can either mean that you don't have the freedesktop mime 
-info database installed, or your environment variables point to the
-wrong places. 
+This module throws an exception when it can't find any data files, when it can't
+open a data file it found for reading or when a subroutine doesn't get enough arguments.
+In the first case youn either don't have the freedesktop mime info database installed, 
+or your environment variables point to the wrong places,
+in the second case you have the database installed, but it is broken 
+(the mime info database should logically be world readable).
 
-An exception is thrown when it can't open a data file it found.
-This should never happen, since the mime info should logically be world
-readable.
+=head1 TODO
+
+Make an option for using some caching mechanism to reduce init time.
+
+Make L<describe> do real xml parsing?
+
+=head1 BUGS
+
+Non I know of, please mail me when you encounter one.
 
 =head1 AUTHOR
 
-Jaap Karssenberg || Pardus [Larus] E<lt>j.g.karssenberg@student.utwente.nlE<gt>
+Jaap Karssenberg || Pardus [Larus] E<lt>pardus@cpan.org<gt>
 
 Copyright (c) 2003 Jaap G Karssenberg. All rights reserved.
 This program is free software; you can redistribute it and/or
@@ -259,7 +319,7 @@ modify it under the same terms as Perl itself.
 
 =over 4
 
-=item other CPAN modules
+=item related CPAN modules
 
 L<File::MMagic>
 

@@ -1,11 +1,11 @@
 
 use strict;
 
-use Test::More tests => 24;
+use Test::More tests => 27;
 
 @File::MimeInfo::DIRS = './t';
 
-use_ok('File::MimeInfo'); # 1
+use_ok('File::MimeInfo', qw/mimetype describe/); # 1
 
 # test what was read
 ok(scalar(keys %File::MimeInfo::extension) == 3, 'extension data is there');	# 2
@@ -46,3 +46,11 @@ ok( mimetype('t/binary_file') eq 'application/octet-stream', 'default works for 
 ok( mimetype('t/plain_text')  eq 'text/plain', 'default works for plain text');			# 22
 ok( mimetype('t/empty_file')  eq 'text/plain', 'default works for empty file');			# 23
 ok( ! defined mimetype('t/non_existing_file'), 'default works for non existing file');		# 24
+
+# test inode thingy
+ok( mimetype('t') eq 'inode/directory', 'directories are recognized'); # 25
+
+# test describe
+ok( describe('text/plain') eq 'Plain Text', 'describe works' ); # 26
+$File::MimeInfo::LANG = 'nl';
+ok( describe('text/plain') eq 'Platte tekst', 'describe works with other languages' ); # 27

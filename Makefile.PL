@@ -8,9 +8,11 @@ WriteMakefile(
 		'Carp'		=> 0,
 		'Exporter'	=> 0,
 		'File::Spec'	=> 0,
+		'Pod::Usage'	=> 0,
 	},
 	($] >= 5.005
-    		? (AUTHOR => 'Jaap Karssenberg <j.g.karssenberg@student.utwente.nl>')
+    		? (AUTHOR => 'Jaap Karssenberg <pardus@cpan.org>')
 		: ()
 	),
+	'EXE_FILES'	=> ['mimetype'],
 );

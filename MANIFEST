@@ -1,3 +1,4 @@
+configure
 mimetype
 Changes
 MimeInfo.pm
@@ -9,3 +10,4 @@ t/binary_file
 t/empty_file
 t/plain_text
 t/mime/globs
+t/mime/text/plain.xml
