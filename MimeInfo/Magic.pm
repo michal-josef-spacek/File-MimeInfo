@@ -18,7 +18,7 @@ BEGIN {
 our @ISA = qw(Exporter File::MimeInfo);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(describe globs inodetype magic);
-our $VERSION = '0.5';
+our $VERSION = '0.6';
 our $DEBUG;
 
 our (@magic); # used to store parse tree of magic data

@@ -16,4 +16,5 @@ t/magic/application_x-executable
 t/magic/application_x-perl
 t/magic/text_x-patch
 t/mime/globs
+t/mime/magic
 t/mime/text/plain.xml

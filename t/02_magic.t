@@ -1,5 +1,8 @@
 require Test::More;
 
+$ENV{XDG_DATA_HOME} = './t/';
+$ENV{XDG_DATA_DIRS} = './t/'; # forceing non default value
+
 opendir MAGIC, 't/magic/';
 my @files = grep {$_ !~ /\./ and $_ ne 'CVS'} readdir MAGIC;
 closedir MAGIC;

@@ -1,5 +1,8 @@
 Revision history for Perl extension File::MimeInfo.
 
+0.6   Thu Sep 04 2003
+      - Emergency release because of a bug in the magic test file
+
 0.5   Wed Sep 03 2003
       - added tests for magic typing
       - fixed design mistake in the basedir file search

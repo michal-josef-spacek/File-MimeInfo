@@ -8,7 +8,7 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(describe globs inodetype);
-our $VERSION = '0.5';
+our $VERSION = '0.6';
 our $DEBUG;
 
 our (@globs, %literal, %extension, $LANG);
