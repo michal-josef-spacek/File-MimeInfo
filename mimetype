@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 use strict;
-our $VERSION = '0.6';
+our $VERSION = '0.8';
 $|++;
 
 # ########## #
@@ -113,7 +113,7 @@ if ($args{debug}) {
 # --file-compat
 $args{describe}++ if $args{'file-compat'} && !$args{mimetype};
 
-# --namfile
+# --namefile
 if ($args{namefile}) {
 	open IN, $args{namefile} 
 		|| die "Couldn't open file: $args{namefile}\n";
@@ -203,7 +203,7 @@ sub resolvelink { # --dereference
 
 sub desc { # Cache desciption
 	return undef unless $_[0];
-	$desc{$_[0]} ||= describe($_[0]);
+	$desc{$_[0]} ||= describe($_[0]) || describe($_[0], '');
 }
 
 __END__
@@ -344,7 +344,7 @@ following directories:
 	/usr/share/mime
 
 See also the "XDG Base Directory Specification" 
-L<http://www.freedesktop.org/standards/basedir-spec/>
+L<http://freedesktop.org/Standards/basedir-spec>
 
 =back
 
@@ -371,7 +371,7 @@ Compiled information about magic numbers.
 =item F<BASE/mime/MEDIA/SUBTYPE.xml>
 
 Descriptions of a mimetype in multiple languages, used for the
-L</--descibe> switch.
+L</--describe> switch.
 
 =back
 
@@ -395,6 +395,12 @@ reading from stdin wasn't implemented yet.
 
 No known bugs, please mail the author if you find one.
 
+B<mimetype> doesn't provide a switch for looking inside compressed files
+because it seems to me that this can only be done by un-compressing the file,
+something that defeats the purpose. On the other hand the option should 
+exist for strict compatibility with file(1). Possibly a subclass should be
+made for this one day.
+
 =head1 AUTHOR
 
 Jaap Karrssenberg E<lt>pardus@cpan.orgE<gt>
@@ -414,5 +420,5 @@ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 L<file(1)>,
 L<update-mime-database(1)>,
 L<File::MimeInfo(3)>,
-L<http://www.freedesktop.org/software/shared-mime-info/>
+L<http://freedesktop.org/Software/shared-mime-info>
 

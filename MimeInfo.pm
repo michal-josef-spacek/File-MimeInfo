@@ -8,7 +8,7 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(describe globs inodetype);
-our $VERSION = '0.7';
+our $VERSION = '0.8';
 our $DEBUG;
 
 our (@globs, %literal, %extension, $LANG);
@@ -99,7 +99,7 @@ sub rehash {
 	++$done && _hash_globs($_) for reverse xdg_data_files('mime/globs');
 	print STDERR << 'EOE' unless $done;
 You don't seem to have a mime-info database.
-See http://www.freedesktop.org/software/shared-mime-info/
+See http://freedesktop.org/Software/shared-mime-info
 EOE
 }
 
@@ -127,10 +127,14 @@ sub _glob_to_regexp {
 }
 
 sub describe {
-	my $mt = pop || croak 'subroutine "describe" needs a mimetype as argument';
-	my $att =  $LANG ? qq{xml:lang="$LANG"} : '';
+	shift if ref $_[0];
+	my ($mt, $lang) = @_;
+	croak 'subroutine "describe" needs a mimetype as argument' unless $mt;
+	$lang = $LANG unless defined $lang;
+	my $att =  $lang ? qq{xml:lang="$lang"} : '';
 	my $desc;
 	for my $file (xdg_data_files('mime', split '/', "$mt.xml")) {
+		$desc = ''; # if a file was found, return at least empty string
 		open XML, $file || croak "Could not open file '$file' for reading";
 		binmode XML, ':utf8' unless $] < 5.008;
 		while (<XML>) {
@@ -204,13 +208,16 @@ actually a normal file.
 Returns a mime-type string for C<$file> based on the glob rules, returns undef on
 failure. The file doesn't need to exist.
 
-=item C<describe($mimetype)>
+=item C<describe($mimetype, $lang)>
 
 Returns a description of this mimetype as supplied by the mime info database.
-You can set the global variable C<$File::MimeInfo::LANG> to specify a language,
-this should be the two letter language code used in the xml files. Returns undef when 
-there seems to be no xml file for this mimetype, this could very well mean the 
-mimetype doesn't exist, it could also mean that the language you specified wasn't found.
+You can specify a language with the optional parameter C<$lang>, this should be 
+the two letter language code used in the xml files. Also you can set the global 
+variable C<$File::MimeInfo::LANG> to specify a language.
+
+This method returns undef when no xml file was found (i.e. the mimetype 
+doesn't exist in the database). It returns an empty string when the xml file doesn't
+contain a description in the language you specified.
 
 I<Currently no real xml parsing is done, it trust the xml files are nicely formatted.>
 
@@ -234,8 +241,6 @@ in the second case you have the database installed, but it is broken
 Make an option for using some caching mechanism to reduce init time.
 
 Make L</describe> do real xml parsing ?
-
-Make Base Dir Spec stuff separate module ?
 
 =head1 BUGS
 
@@ -265,12 +270,12 @@ L<File::MMagic>
 
 =item freedesktop specifications used
 
-L<http://www.freedesktop.org/standards/shared-mime-info-spec/>,
-L<http://www.freedesktop.org/standards/basedir-spec/>
+L<http://freedesktop.org/Standards/shared-mime-info-spec>,
+L<http://freedesktop.org/Standards/basedir-spec>
 
 =item freedesktop mime database
 
-L<http://www.freedesktop.org/software/shared-mime-info/>
+L<http://freedesktop.org/Software/shared-mime-info>
 
 =item other programs using this mime system
 

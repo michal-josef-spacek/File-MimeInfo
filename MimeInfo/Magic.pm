@@ -18,7 +18,7 @@ BEGIN {
 our @ISA = qw(Exporter File::MimeInfo);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(describe globs inodetype magic);
-our $VERSION = '0.6';
+our $VERSION = '0.8';
 our $DEBUG;
 
 our (@magic); # used to store parse tree of magic data
@@ -125,7 +125,7 @@ sub _hash_magic {
 
 		/^(?:&(.{$l}))?(?:~(\d+))?(?:\+(\d+))?\n$/s 
 			|| carp "$file line $line skipped\n" && next;
-		my ($m, $w, $r) = ($1, $2, $3); # mask, word size, range
+		my ($m, $w, $r) = ($1, $2, $3 || 0); # mask, word size, range
 		# the word size is given for big endian to little endian conversion
 		# dunno whether we need to do that in perl
 

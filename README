@@ -1,4 +1,4 @@
-File-MimeInfo version 0.7
+File-MimeInfo version 0.8
 =========================
 
 This module can be used to determine the mime type of a file; it's a 
@@ -22,7 +22,7 @@ This module expects the freedesktop mime database to be installed,
 some linux distrobutions include it, otherwise it can obtained 
 from :
 
-  http://www.freedesktop.org/software/shared-mime-info/
+  http://freedesktop.org/Software/shared-mime-info
 
 This module requires these other modules which can be obtained from
 the CPAN <http://cpan.org> if they are not allready installed on

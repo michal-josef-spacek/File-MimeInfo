@@ -1,5 +1,18 @@
 Revision history for Perl extension File::MimeInfo.
 
+0.8   Wed Oct 22 2003
+      Seems that the new version of the mime-info spec takes longer then
+      I expected, so I decided to release last weeks bug fixes.
+
+      Sat Oct 18 2003
+      - Fine tuned the method interface for describe()
+      - Made mimetype -d -l .. default to english for missing translations
+      - updated URL's for freedesktop
+
+      Thu Oct 16 2003
+      - Fixed small bug in Magic.pm causing a lot of warnings on 
+      initialisation when using 'perl -w', reported by Steve Barton
+
 0.7   Fri Oct 03 2003
       - Added File::MimeInfo::Rox
       - ++'ing  version number to keep CPAN satisfied
