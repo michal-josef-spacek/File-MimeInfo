@@ -1,0 +1,8 @@
+mimetype
+Changes
+MimeInfo.pm
+Makefile.PL
+MANIFEST
+README
+t/test.t
+t/mime/globs

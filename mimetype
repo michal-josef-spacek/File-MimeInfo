@@ -1,0 +1,10 @@
+#!/usr/bin/perl
+
+use File::MimeInfo;
+
+unless (@ARGV) {
+	print qq{usage : $0 [filenames]\n\tprint out the mimetype of each filename\n};
+	exit;
+}
+
+for (@ARGV) { print $_, ': ', (mimetype($_) || 'UNKNOWN'), "\n" }
