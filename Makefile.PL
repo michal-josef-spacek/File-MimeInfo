@@ -9,6 +9,7 @@ WriteMakefile(
 		'Exporter'	=> 0,
 		'Fcntl'		=> 0,
 		'Pod::Usage'	=> 0,
+		'File::Basename'=> 0,
 		'File::BaseDir'	=> 0,
 	},
 	($] >= 5.005

@@ -1,5 +1,22 @@
 Revision history for Perl extension File::MimeInfo.
 
+0.11  Fri Mar 18 2005
+      - Added an @DIRS to be able to overload the XDG_DATA_DIRS path
+      - Fixed the code to let "mimetype" determine the mime-type of STDIN
+
+      Thu Mar 17 2005
+      - Fixed a bug in the globs() method, added File::Basename to the
+      dependency list.
+      - Added the --all and --magic-only options to "mimetype"
+
+      Wed Mar 16 2005
+      - globs() now returns the matched extension when called in list context
+      - Added Cookbook.pm as a kind of FAQ document
+      - Applied part of a patch to support reverse lookup of extensions
+      which was also supplied by jgmyers at proofpoint.com
+      This adds the extensions() method and fixes a bug in a regex.
+      - Applied a spelling patch supplied by jgmyers at proofpoint.com
+
 0.10  Sun Feb 08 2004
       - Stripped down test for IO objects, because it doesn't seem to be platform
       independent enough

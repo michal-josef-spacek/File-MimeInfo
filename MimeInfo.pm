@@ -3,20 +3,23 @@ package File::MimeInfo;
 use strict;
 use Carp;
 use Fcntl 'SEEK_SET';
+use File::Basename qw/basename/;
 use File::BaseDir qw/xdg_data_files/;
 require Exporter;
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mimetype);
-our @EXPORT_OK = qw(describe globs inodetype);
-our $VERSION = '0.10';
+our @EXPORT_OK = qw(extensions describe globs inodetype);
+our $VERSION = '0.11';
 our $DEBUG;
 
-our (@globs, %literal, %extension, $LANG);
+our (@globs, %literal, %extension, %mime2ext, $LANG, @DIRS);
 # @globs = [ [ 'glob', qr//, $mime_string ], ... ]
 # %literal contains literal matches
 # %extension contains extensions (globs matching /^\*(\.\w)+$/ )
+# %mime2ext is used for looking up extension by mime type
 # $LANG can be used to set a default language for the comments
+# @DIRS can be used to specify custom database directories
 
 rehash(); # initialise data
 
@@ -45,25 +48,21 @@ sub inodetype {
 
 sub globs {
 	my $file = pop || croak 'subroutine "globs" needs a filename as argument';
+	$file = basename($file);
 	print STDERR "> Checking globs for basename '$file'\n" if $DEBUG;
 
 	return $literal{$file} if exists $literal{$file};
 
 	if ($file =~ /\.(\w+(\.\w+)*)$/) {
 		my @ext = split /\./, $1;
-		if ($#ext) {
-			while (@ext) {
-				my $ext = join('.', @ext);
-				print STDERR "> Checking for extension '.$ext'\n" if $DEBUG;
-				return $extension{$ext}
-					if exists $extension{$ext};
-				shift @ext;
-			}
-		}
-		else {
-			print STDERR "> Checking for extension '.$ext[0]'\n" if $DEBUG;
-			return $extension{$ext[0]}
-				if exists $extension{$ext[0]};
+		while (@ext) {
+			my $ext = join('.', @ext);
+			print STDERR "> Checking for extension '.$ext'\n" if $DEBUG;
+			return wantarray
+				? ($extension{$ext}, $ext)
+				: $extension{$ext}
+				if exists $extension{$ext};
+			shift @ext;
 		}
 	}
 
@@ -108,13 +107,20 @@ sub default {
 }
 
 sub rehash {
-	(@globs, %literal, %extension) = ((), (), ()); # clear data
-	my $done;
-	++$done && _hash_globs($_) for reverse xdg_data_files('mime/globs');
-	print STDERR << 'EOE' unless $done;
+	(@globs, %literal, %extension, %mime2ext) = ((), (), (), ()); # clear data
+	my @globfiles = @DIRS
+		? ( grep {-e $_ && -r $_} map "$_/globs", @DIRS )
+		: ( reverse xdg_data_files('mime/globs')        );
+	print STDERR << 'EOE' unless @globfiles;
 You don't seem to have a mime-info database.
 See http://freedesktop.org/Software/shared-mime-info
 EOE
+	my @done;
+	for my $file (@globfiles) {
+		next if grep {$file eq $_} @done;
+		_hash_globs($file);
+		push @done, $file;
+	}
 }
 
 sub _hash_globs {
@@ -126,8 +132,11 @@ sub _hash_globs {
 		chomp;
 		($string, $glob) = split /:/, $_, 2;
 		unless ($glob =~ /[\?\*\[]/) { $literal{$glob} = $string }
-		elsif ($glob =~ /^\*\.(\w+(\.\w+)*)$/) { $extension{$1} = $string }
-		else { unshift @globs, [$glob, _glob_to_regexp($glob), $string] }
+		elsif ($glob =~ /^\*\.(\w+(\.\w+)*)$/) { 
+		    $extension{$1} = $string;
+		    $mime2ext{$string} = [] if !defined($mime2ext{$string});
+		    push @{$mime2ext{$string}}, $1;
+		} else { unshift @globs, [$glob, _glob_to_regexp($glob), $string] }
 	}
 	close GLOB || croak "Could not open file '$file' for reading" ;
 }
@@ -140,6 +149,12 @@ sub _glob_to_regexp {
 	qr/^$glob$/;
 }
 
+sub extensions {
+        my $ref = $mime2ext{$_[0]};
+        return $ref ? @{$ref}    : undef if wantarray;
+        return $ref ? @{$ref}[0] : '';
+}
+
 sub describe {
 	shift if ref $_[0];
 	my ($mt, $lang) = @_;
@@ -147,7 +162,10 @@ sub describe {
 	$lang = $LANG unless defined $lang;
 	my $att =  $lang ? qq{xml:lang="$lang"} : '';
 	my $desc;
-	for my $file (xdg_data_files('mime', split '/', "$mt.xml")) {
+	my @descfiles = @DIRS
+		? ( grep {-e $_ && -r $_} map "$_/$mt.xml", @DIRS        )
+		: ( reverse xdg_data_files('mime', split '/', "$mt.xml") ) ;
+	for my $file (@descfiles) {
 		$desc = ''; # if a file was found, return at least empty string
 		open XML, $file || croak "Could not open file '$file' for reading";
 		binmode XML, ':utf8' unless $] < 5.008;
@@ -210,7 +228,7 @@ Returns a mime-type string for C<$file>, returns undef on failure.
 
 This method bundles C<inodetype> and C<globs>.
 
-If these methods are unsuccessfull the file is read and the mime-type defaults
+If these methods are unsuccessful the file is read and the mime-type defaults
 to 'text/plain' or to 'application/octet-stream' when the first ten chars
 of the file match ascii control chars (white spaces excluded).
 If the file doesn't exist or isn't readable C<undef> is returned.
@@ -225,6 +243,15 @@ actually a normal file.
 Returns a mime-type string for C<$file> based on the glob rules, returns undef on
 failure. The file doesn't need to exist.
 
+When called in list context and the mimetype is determined by the extension
+it also returns the extension. This allows you to split a file in name + extension
+correctly even when the name contains dots.
+
+=item C<extensions($mimetype)>
+
+In list context, returns the list of extensions of a given mime-type;
+In scalar context, returns the mime-type that was first found in the database.
+
 =item C<describe($mimetype, $lang)>
 
 Returns a description of this mimetype as supplied by the mime info database.
@@ -236,11 +263,15 @@ This method returns undef when no xml file was found (i.e. the mimetype
 doesn't exist in the database). It returns an empty string when the xml file doesn't
 contain a description in the language you specified.
 
-I<Currently no real xml parsing is done, it trust the xml files are nicely formatted.>
+I<Currently no real xml parsing is done, it trusts the xml files are nicely formatted.>
 
 =item C<rehash()>
 
 Rehash the data files. Glob information is preparsed when this method is called.
+
+If you want to by-pass the XDG basedir system you can specify your database
+directories by setting C<@File::MimeInfo::DIRS>. But normally it is better to
+change the XDG basedir environment variables.
 
 =back
 
@@ -248,7 +279,7 @@ Rehash the data files. Glob information is preparsed when this method is called.
 
 This module throws an exception when it can't find any data files, when it can't
 open a data file it found for reading or when a subroutine doesn't get enough arguments.
-In the first case youn either don't have the freedesktop mime info database installed, 
+In the first case you either don't have the freedesktop mime info database installed, 
 or your environment variables point to the wrong places,
 in the second case you have the database installed, but it is broken 
 (the mime info database should logically be world readable).
@@ -265,7 +296,7 @@ Perl versions prior to 5.8.0 do not have the ':utf8' IO Layer, thus
 for the default method and for reading the xml files
 utf8 is not supported for these versions.
 
-Since it is not possible to distinguishe between encoding types (utf8, latin1, latin2 etc.)
+Since it is not possible to distinguish between encoding types (utf8, latin1, latin2 etc.)
 in a straightforward manner only utf8 is supported (because the spec recommends this).
 
 Please mail the author when you encounter any other bugs.

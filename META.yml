@@ -1,7 +1,7 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         File-MimeInfo
-version:      0.10
+version:      0.11
 version_from: MimeInfo.pm
 installdirs:  site
 requires:
@@ -9,6 +9,7 @@ requires:
     Exporter:                      0
     Fcntl:                         0
     File::BaseDir:                 0
+    File::Basename:                0
     Pod::Usage:                    0
 
 distribution_type: module

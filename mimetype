@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 use strict;
-our $VERSION = '0.8';
+our $VERSION = '0.11';
 $|++;
 
 # ########## #
@@ -25,7 +25,9 @@ my %opts = (
 	'dereference'	=> ['L'],
 	'separator'	=> ['F',1],
 	'debug'		=> ['D'],
-	'dir'		=> ['', 1],
+	'database'	=> ['', 1],
+	'all'		=> ['a'],
+	'magic-only'	=> ['M'],
 );
 
 $args{'file-compat'}++ if $0 =~ m#(^|/)file$#;
@@ -85,6 +87,7 @@ EOV
 	exit 0;
 }
 
+$args{stdin}++ if -p STDIN and ! @ARGV;
 complain(undef, 4) unless scalar(@ARGV) || $args{stdin} || $args{namefile};
 
 # ############# #
@@ -93,20 +96,26 @@ complain(undef, 4) unless scalar(@ARGV) || $args{stdin} || $args{namefile};
 
 our %desc; # desc caching hash
 
-# --dir
-$File::MimeInfo::DIR = $args{dir} if $args{dir};
+# --database
+@File::MimeInfo::DIRS = split /:/, $args{database} if $args{database};
 
 ## Actually use our module ##
-eval 'use File::MimeInfo::Magic qw/mimetype describe/;';
+eval 'use File::MimeInfo::Magic qw/mimetype globs inodetype magic describe/;';
 die $@ if $@;
+
+*default = \&File::MimeInfo::default;
 
 # --debug
 if ($args{debug}) {
 	$File::MimeInfo::DEBUG++;
 	$File::MimeInfo::Magic::DEBUG++;
 	print	'> Data dirs are: ', join( ', ', 
-			File::BaseDir::xdg_data_home(),
-			File::BaseDir::xdg_data_dirs()
+			$args{database}
+				? ( split /:/, $args{database} )
+				: (
+					File::BaseDir::xdg_data_home(),
+					File::BaseDir::xdg_data_dirs()
+				)
 		), "\n";
 }
 
@@ -145,25 +154,43 @@ if ($args{dereference}) {
 	eval 'use File::Spec';
 	die "Could not find perl module File::Spec\n" if $@;
 }
+# --stdin
 if ($args{stdin}) {
-	eval 'use IO::Handle';
-	die "Could not find perl module IO::Handle\n" if $@;
+	eval 'use IO::Scalar';
+	die "Could not find perl module IO::Scalar\n" if $@;
 }
 
 # ######## #
 # do stuff #
 # ######## #
 
+# --stdin
 if ($args{stdin}) {
-	my $fh = IO::Handle->new_from_fd(fileno(STDIN), 'r');
-	print $format->('STDIN', mimetype($fh)), "\n";
+	my $data;
+	read(STDIN, $data, $File::MimeInfo::Magic::max_buffer);
+	my $scalar = new IO::Scalar \$data;
+	print $format->('STDIN', mimetype($scalar)), "\n";
+	exit;
 }
 
 foreach my $file (@ARGV) {
 	# --dereference
 	my $f = ($args{dereference} && -l $file) ? resolvelink($file) : $file;
-	print $format->($file, mimetype($f)), "\n";
+	# --magic-only
+	if ($args{'magic-only'}) { 
+		print $format->($file, magic($f) || default($f)), "\n";
+	}
+	# --all
+	elsif ($args{all}) {
+		for (qw#inodetype globs magic default#) {
+			my $m = eval "$_(\$f)";
+			print $format->($file, $m), "\n" if $m;
+		}
+	}
+	else { print $format->($file, mimetype($f)), "\n" }
 }
+
+exit;
 
 # ########### #
 # Subroutines #
@@ -238,19 +265,27 @@ when possible. They seem to differ completely from the spec in the
 
 =over 4
 
+=item B<-a>, B<--all>
+
+Show output of all rules that match the file.
+
+TODO: this method now just returns one match for each
+method (globs, magic, etc.).
+
 =item B<-b>, B<--brief>
 
 Do not prepend filenames to output lines (brief mode).
+
+=item B<--database>=I<mimedir>:I<mimedir>:...
+
+Force the program to look in these directories for the shared mime-info
+database. The directories specified by the basedir specification
+are ignored.
 
 =item B<-d>, B<--describe>
 
 Print file descriptions instead of mime types, this is the
 default when using L</--file-compat>.
-
-=item B<--dir>=I<mimedir>
-
-Force the program to look in 'mimedir' for the shared mime-info
-database.
 
 =item B<-D>, B<--debug>
 
@@ -298,6 +333,12 @@ Follow symbolic links.
 The language attribute specifies a two letter language code, this makes
 descriptions being outputted in the specified language.
 
+=item B<-M>, B<--magic-only>
+
+Do not check for extensions, globs or inode type, only look at the content
+of the file. This is particularly useful if for some reason you don't trust
+the name or the extension a file has.
+
 =item B<-N>, B<--noalign>
 
 Do not align output fields.
@@ -319,8 +360,6 @@ you need to post-process the output to do that.
 Determine type of content from STDIN, less powerfull then normal file checking
 because it only uses magic typing. This will happen also if the STDIN filehandle
 is a pipe.
-
-I<see TODO>
 
 =item B<-v>, B<--version>
 
@@ -389,6 +428,9 @@ arguments failed, a module it depends on wasn't found or the shared
 mime-info database wasn't accesable. See L<File::MimeInfo> for more details.
 
 =head1 TODO
+
+The '--all' switch doesn't really show all matches, but only one per
+mime-typing method. This needs to be implemnted in the modules first.
 
 Since the magic implementation currently only can handle seekable file handles
 reading from stdin wasn't implemented yet.

@@ -10,18 +10,21 @@ require Exporter;
 
 BEGIN {
 	no strict "refs";
-	for (qw/describe globs inodetype default/) {
+	for (qw/extensions describe globs inodetype default/) {
 		*{$_} = \&{"File::MimeInfo::$_"};
 	}
 }
 
 our @ISA = qw(Exporter File::MimeInfo);
 our @EXPORT = qw(mimetype);
-our @EXPORT_OK = qw(describe globs inodetype magic);
-our $VERSION = '0.9';
+our @EXPORT_OK = qw(extensions describe globs inodetype magic);
+our $VERSION = '0.11';
 our $DEBUG;
 
-our (@magic); # used to store parse tree of magic data
+our (@magic, $max_buffer);
+# @magic is used to store parse tree of magic data
+# $max_buffer contains the maximum number of chars to be buffered from a non-seekable
+# filehandle in order to do magic mimetyping
 
 _rehash(); # initialize data
 
@@ -99,13 +102,21 @@ sub _check_rule {
 }
 
 sub rehash { 
-	&File::MimeInfo::rehash;
-	&_rehash
+	&File::MimeInfo::rehash();
+	&_rehash();
 }
 
 sub _rehash {
-	@magic = ();
-	_hash_magic($_) for reverse xdg_data_files('mime/magic');
+	($max_buffer, @magic) = (0); # clear data
+	my @magicfiles = @File::MimeInfo::DIRS
+		? ( grep {-e $_ && -r $_} map "$_/magic", @File::MimeInfo::DIRS )
+		: ( reverse xdg_data_files('mime/magic')                        );
+	my @done;
+	for my $file (@magicfiles) {
+		next if grep {$file eq $_} @done;
+		_hash_magic($file);
+		push @done, $file;
+	}
 	@magic = sort {$$b[0] <=> $$a[0]} @magic;
 }
 
@@ -141,14 +152,16 @@ sub _hash_magic {
 		# the word size is given for big endian to little endian conversion
 		# dunno whether we need to do that in perl
 
+		my $end = $o + $l + $r;
+		$max_buffer = $end if $max_buffer < $end;
 		my $ref = $i ? _find_branch($i) : $magic[-1];
 		my $reg = '^'
 			. ( $r ? "(.{0,$r}?)" : '()' )
 			. ( $m ? "(.{$l})" : '('.quotemeta($v).')' ) ;
 		push @$ref, [
 			$line,
-			[$o, $o+$l+$r],
-			qr/$reg/,
+			[$o, $end],
+			qr/$reg/sm,
 			$m ? [$v, $m] : 0
 		];
 	}
@@ -214,7 +227,8 @@ to 'text/plain' or to 'application/octet-stream' when the first ten chars
 of the file match ascii control chars (white spaces excluded).
 If the file doesn't exist or isn't readable C<undef> is returned.
 
-If C<$file> is an object reference only C<magic> and the default method are used.
+If C<$file> is an object reference only C<magic> and the default method
+are used.
 
 =item C<magic($file)>
 
@@ -230,6 +244,10 @@ by using L<IO::Scalar>.
 
 Rehash the data files. Glob and magic 
 information is preparsed when this method is called.
+
+If you want to by-pass the XDG basedir system you can specify your database
+directories by setting C<@File::MimeInfo::DIRS>. But normally it is better to
+change the XDG basedir environment variables.
 
 =back
 

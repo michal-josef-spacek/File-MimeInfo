@@ -2,6 +2,7 @@ configure
 mimetype
 Changes
 MimeInfo.pm
+MimeInfo/Cookbook.pod
 MimeInfo/Magic.pm
 MimeInfo/Rox.pm
 Makefile.PL
