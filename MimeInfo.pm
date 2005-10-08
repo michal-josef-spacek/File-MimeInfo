@@ -3,21 +3,23 @@ package File::MimeInfo;
 use strict;
 use Carp;
 use Fcntl 'SEEK_SET';
-use File::Basename qw/basename/;
+use File::Spec;
 use File::BaseDir qw/xdg_data_files/;
 require Exporter;
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mimetype);
-our @EXPORT_OK = qw(extensions describe globs inodetype);
-our $VERSION = '0.11';
+our @EXPORT_OK = qw(extensions describe globs inodetype mimetype_canon mimetype_isa);
+our $VERSION = '0.12';
 our $DEBUG;
 
-our (@globs, %literal, %extension, %mime2ext, $LANG, @DIRS);
+our (@globs, %literal, %extension, %mime2ext, %aliases, %subclasses, $_hashed_aliases, $_hashed_subclasses, $LANG, @DIRS);
 # @globs = [ [ 'glob', qr//, $mime_string ], ... ]
 # %literal contains literal matches
 # %extension contains extensions (globs matching /^\*(\.\w)+$/ )
 # %mime2ext is used for looking up extension by mime type
+# %aliases contains the aliases table
+# %subclasses contains the subclasses table
 # $LANG can be used to set a default language for the comments
 # @DIRS can be used to specify custom database directories
 
@@ -38,17 +40,31 @@ sub mimetype {
 sub inodetype {
 	my $file = pop;
 	print STDERR "> Checking inode type\n" if $DEBUG;
-	return	(-d $file) ? 'inode/directory'   :
-		(-l $file) ? 'inode/symlink'     :
-		(-p $file) ? 'inode/fifo'        :
-		(-c $file) ? 'inode/chardevice'  :
-		(-b $file) ? 'inode/blockdevice' :
-		(-S $file) ? 'inode/socket'      : undef ;
+	lstat $file or return undef;
+	return undef if -f _;
+	my $t =	(-l _) ? 'inode/symlink'     :
+		(-d _) ? 'inode/directory'   :
+		(-p _) ? 'inode/fifo'        :
+		(-c _) ? 'inode/chardevice'  :
+		(-b _) ? 'inode/blockdevice' :
+		(-S _) ? 'inode/socket'      : '' ;
+	if ($t eq 'inode/directory') { # compare devices to detext mount-points
+		my $dev = (stat _)[0]; # device of the node under investigation
+		$file = File::Spec->rel2abs($file); # get full path
+		my @dirs = File::Spec->splitdir($file);
+		$file = File::Spec->catfile(@dirs); # removes trailing '/' or equivalent
+		return $t if -l $file; # parent can be on other dev for links
+		pop @dirs;
+		my $dir = File::Spec->catdir(@dirs); # parent dir
+		$t = 'inode/mount-point' unless (stat $dir)[0] == $dev; # compare devices
+		return $t;
+	}
+	else { return $t ? $t : undef }
 }
 
 sub globs {
 	my $file = pop || croak 'subroutine "globs" needs a filename as argument';
-	$file = basename($file);
+	(undef, undef, $file) = File::Spec->splitpath($file); # remove path
 	print STDERR "> Checking globs for basename '$file'\n" if $DEBUG;
 
 	return $literal{$file} if exists $literal{$file};
@@ -58,6 +74,7 @@ sub globs {
 		while (@ext) {
 			my $ext = join('.', @ext);
 			print STDERR "> Checking for extension '.$ext'\n" if $DEBUG;
+			warn "WARNING: wantarray behaviour of globs() will change in the future.\n" if wantarray;
 			return wantarray
 				? ($extension{$ext}, $ext)
 				: $extension{$ext}
@@ -107,14 +124,15 @@ sub default {
 }
 
 sub rehash {
-	(@globs, %literal, %extension, %mime2ext) = ((), (), (), ()); # clear data
+	(@globs, %literal, %extension, %mime2ext, %aliases, %subclasses, $_hashed_aliases, $_hashed_subclasses) = (); # clear all data
 	my @globfiles = @DIRS
 		? ( grep {-e $_ && -r $_} map "$_/globs", @DIRS )
 		: ( reverse xdg_data_files('mime/globs')        );
-	print STDERR << 'EOE' unless @globfiles;
-You don't seem to have a mime-info database.
-See http://freedesktop.org/Software/shared-mime-info
-EOE
+	print STDERR << 'EOT' unless @globfiles;
+WARNING: You don't seem to have a mime-info database.
+The shared-mime-info package is available from
+http://freedesktop.org/wiki/Software_2fshared_2dmime_2dinfo
+EOT
 	my @done;
 	for my $file (@globfiles) {
 		next if grep {$file eq $_} @done;
@@ -126,9 +144,10 @@ EOE
 sub _hash_globs {
 	my $file = shift;
 	open GLOB, $file || croak "Could not open file '$file' for reading" ;
+	binmode GLOB, ':utf8' unless $] < 5.008;
 	my ($string, $glob);
 	while (<GLOB>) {
-		next if /^\s*#/; # skip comments
+		next if /^\s*#/ or ! /\S/; # skip comments and empty lines
 		chomp;
 		($string, $glob) = split /:/, $_, 2;
 		unless ($glob =~ /[\?\*\[]/) { $literal{$glob} = $string }
@@ -150,8 +169,9 @@ sub _glob_to_regexp {
 }
 
 sub extensions {
-        my $ref = $mime2ext{$_[0]};
-        return $ref ? @{$ref}    : undef if wantarray;
+	my $mimet = mimetype_canon(pop @_);
+        my $ref = $mime2ext{$mimet} if exists $mime2ext{$mimet};
+	return $ref ? @{$ref}    : undef if wantarray;
         return $ref ? @{$ref}[0] : '';
 }
 
@@ -159,6 +179,7 @@ sub describe {
 	shift if ref $_[0];
 	my ($mt, $lang) = @_;
 	croak 'subroutine "describe" needs a mimetype as argument' unless $mt;
+	$mt = mimetype_canon($mt);
 	$lang = $LANG unless defined $lang;
 	my $att =  $lang ? qq{xml:lang="$lang"} : '';
 	my $desc;
@@ -180,6 +201,70 @@ sub describe {
 	return $desc;
 }
 
+sub mimetype_canon {
+	my $mimet = pop || croak 'mimetype_canon needs argument';
+	rehash_aliases() unless $_hashed_aliases;
+	return exists($aliases{$mimet}) ? $aliases{$mimet} : $mimet;
+}
+
+sub rehash_aliases {
+	%aliases = _read_map_files('aliases');
+	$_hashed_aliases++;
+}
+
+sub _read_map_files {
+	my ($name, $list) = @_;
+	my @files = @DIRS
+		? ( grep {-e $_ && -r $_} map "$_/$name", @DIRS )
+		: ( reverse xdg_data_files("mime/$name")        );
+	my (@done, %map);
+	for my $file (@files) {
+		next if grep {$_ eq $file} @done;
+		open MAP, $file || croak "Could not open file '$file' for reading";
+		binmode MAP, ':utf8' unless $] < 5.008;
+		while (<MAP>) {
+			next if /^\s*#/ or ! /\S/; # skip comments and empty lines
+			chomp;
+			my ($k, $v) = split /\s+/, $_, 2;
+			if ($list) {
+				$map{$k} = [] unless $map{$k};
+				push @{$map{$k}}, $v;
+			}
+			else { $map{$k} = $v }
+		}
+		close MAP;
+		push @done, $file;
+	}
+	return %map;
+}
+
+sub mimetype_isa {
+	my $parent = pop || croak 'mimetype_isa needs argument';
+	my $mimet = pop;
+	if (ref $mimet or ! defined $mimet) {
+		$mimet = mimetype_canon($parent);
+		undef $parent;
+	}
+	else {
+		$mimet = mimetype_canon($mimet);
+		$parent = mimetype_canon($parent);
+	}
+	rehash_subclasses() unless $_hashed_subclasses;
+
+	my @subc;
+	push @subc, 'inode/directory' if $mimet eq 'inode/mount-point';
+	push @subc, @{$subclasses{$mimet}} if exists $subclasses{$mimet};
+	push @subc, 'text/plain' if $mimet =~ m#^text/#;
+	push @subc, 'application/octet-stream' unless $mimet =~ m#^inode/#;
+
+	return $parent ? scalar(grep {$_ eq $parent} @subc) : @subc;
+}
+
+sub rehash_subclasses {
+	%subclasses = _read_map_files('subclasses', 'LIST');
+	$_hashed_subclasses++;
+}
+
 1;
 
 __END__
@@ -199,7 +284,7 @@ This module can be used to determine the mime type of a file. It
 tries to implement the freedesktop specification for a shared
 MIME database.
 
-For this module shared-mime-info-spec 0.12 was used.
+For this module shared-mime-info-spec 0.13 was used.
 
 This package only uses the globs file. No real magic checking is
 used. The L<File::MimeInfo::Magic> package is provided for magic typing.
@@ -210,7 +295,8 @@ use L<File::MimeInfo::Magic> in combination with L<IO::Scalar>.
 =head1 EXPORT
 
 The method C<mimetype> is exported by default.
-The methods C<inodetype>, C<globs> and C<describe> can be exported on demand.
+The methods C<inodetype>, C<globs>, C<extensions>, C<describe>,
+C<mimetype_canon> and C<mimetype_isa> can be exported on demand.
 
 =head1 METHODS
 
@@ -219,16 +305,16 @@ The methods C<inodetype>, C<globs> and C<describe> can be exported on demand.
 =item C<new()>
 
 Simple constructor to allow Object Oriented use of this module.
-If you want to use this, use the package as C<use File::MimeInfo ();>
-to avoid importing sub C<mimetype>.
+If you want to use this, include the package as C<use File::MimeInfo ();>
+to avoid importing sub C<mimetype()>.
 
 =item C<mimetype($file)>
 
-Returns a mime-type string for C<$file>, returns undef on failure.
+Returns a mimetype string for C<$file>, returns undef on failure.
 
 This method bundles C<inodetype> and C<globs>.
 
-If these methods are unsuccessful the file is read and the mime-type defaults
+If these methods are unsuccessful the file is read and the mimetype defaults
 to 'text/plain' or to 'application/octet-stream' when the first ten chars
 of the file match ascii control chars (white spaces excluded).
 If the file doesn't exist or isn't readable C<undef> is returned.
@@ -240,17 +326,17 @@ actually a normal file.
 
 =item C<globs($file)>
 
-Returns a mime-type string for C<$file> based on the glob rules, returns undef on
-failure. The file doesn't need to exist.
+Returns a mimetype string for C<$file> based on the filename and filename extensions.
+Returns undef on failure. The file doesn't need to exist.
 
-When called in list context and the mimetype is determined by the extension
-it also returns the extension. This allows you to split a file in name + extension
-correctly even when the name contains dots.
+Behaviour in list context (wantarray) is unspecified and will change in future
+releases.
 
 =item C<extensions($mimetype)>
 
-In list context, returns the list of extensions of a given mime-type;
-In scalar context, returns the mime-type that was first found in the database.
+In list context, returns the list of filename extensions that map to the given mimetype.
+In scalar context, returns the first extension that is found in the database
+for this mimetype.
 
 =item C<describe($mimetype, $lang)>
 
@@ -265,6 +351,28 @@ contain a description in the language you specified.
 
 I<Currently no real xml parsing is done, it trusts the xml files are nicely formatted.>
 
+=item C<mimetype_canon($mimetype)>
+
+Returns the canonical mimetype for a given mimetype.
+Deprecated mimetypes are typically aliased to their canonical variants.
+This method only checks aliases, doesn't check whether the mimetype
+exists.
+
+Use this method as a filter when you take a mimetype as input.
+
+=item C<mimetype_isa($mimetype)>
+
+=item C<mimetype_isa($mimetype, $mimetype)>
+
+When give only one argument this method returns a list with mimetypes that are parent
+classes for this mimetype.
+
+When given two arguments returns true if the second mimetype is a parent class of
+the first one.
+
+This method checks the subclasses table and applies a few rules for implicite
+subclasses.
+
 =item C<rehash()>
 
 Rehash the data files. Glob information is preparsed when this method is called.
@@ -272,6 +380,14 @@ Rehash the data files. Glob information is preparsed when this method is called.
 If you want to by-pass the XDG basedir system you can specify your database
 directories by setting C<@File::MimeInfo::DIRS>. But normally it is better to
 change the XDG basedir environment variables.
+
+=item C<rehash_aliases()>
+
+Rehashes the F<mime/aliases> files.
+
+=item C<rehash_subclasses()>
+
+Rehashes the F<mime/subclasses> files.
 
 =back
 
@@ -288,9 +404,9 @@ in the second case you have the database installed, but it is broken
 
 Make an option for using some caching mechanism to reduce init time.
 
-Make L</describe> do real xml parsing ?
+Make C<describe()> use real xml parsing ?
 
-=head1 BUGS
+=head1 LIMITATIONS
 
 Perl versions prior to 5.8.0 do not have the ':utf8' IO Layer, thus
 for the default method and for reading the xml files
@@ -299,7 +415,12 @@ utf8 is not supported for these versions.
 Since it is not possible to distinguish between encoding types (utf8, latin1, latin2 etc.)
 in a straightforward manner only utf8 is supported (because the spec recommends this).
 
-Please mail the author when you encounter any other bugs.
+This module does not yet check extended attributes for a mimetype.
+Patches for this are very welcome.
+
+=head1 BUGS
+
+Please mail the author when you encounter any bugs.
 
 =head1 AUTHOR
 
@@ -313,6 +434,7 @@ modify it under the same terms as Perl itself.
 
 L<File::BaseDir>,
 L<File::MimeInfo::Magic>,
+L<File::MimeInfo::Applications>,
 L<File::MimeInfo::Rox>
 
 =over 4
@@ -323,15 +445,18 @@ L<File::MMagic>
 
 =item freedesktop specifications used
 
-L<http://freedesktop.org/Standards/shared-mime-info-spec>,
-L<http://freedesktop.org/Standards/basedir-spec>
+L<http://freedesktop.org/wiki/Standards_2fshared_2dmime_2dinfo_2dspec>,
+L<http://freedesktop.org/wiki/Standards_2fbasedir_2dspec>,
+L<http://freedesktop.org/wiki/Standards_2fdesktop_2dentry_2dspec>
 
 =item freedesktop mime database
 
-L<http://freedesktop.org/Software/shared-mime-info>
+L<http://freedesktop.org/wiki/Software_2fshared_2dmime_2dinfo>
 
 =item other programs using this mime system
 
 L<http://rox.sourceforge.net>
+
+=back
 
 =cut

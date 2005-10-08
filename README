@@ -1,4 +1,4 @@
-File-MimeInfo version 0.11
+File-MimeInfo version 0.12
 ==========================
 
 This module can be used to determine the mime type of a file; it's a 
@@ -32,6 +32,7 @@ your system :
   Exporter
   Fcntl
   Pod::Usage
+  File::Basename
   File::BaseDir
 
 COPYRIGHT AND LICENCE

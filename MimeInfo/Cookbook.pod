@@ -34,8 +34,10 @@ In fact most other IO:: will work as long as they support the C<seek()>
 and C<read()> methods. Of course if you want really obscure things to
 happen you can always write your own IO object and feed it in there.
 
-Regrettably using an IO won't work on non-seekable filehandles like
-STDIN. You will need to buffer enough of these files for a proper
+=item Mimetyping a filehandle
+
+Regrettably for non-seekable filehandles like STDIN simply using an IO::
+object will not work. You will need to buffer enough of the data for a proper
 mimetyping. For example you could mimetype data from STDIN like this:
 
   use File::MimeInfo::Magic;

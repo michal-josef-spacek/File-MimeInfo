@@ -1,5 +1,16 @@
 Revision history for Perl extension File::MimeInfo.
 
+0.12  Sat Oct  8 2005
+      Updated to version 0.13 of the shared mimeinfo specification
+      - Magic rules with priority 80 go above globs now
+      - Added mimetype_isa() to check for mimetype subclasses
+      - Added mimetype_canon() to check for mimetype aliases
+      - Added support for the inode/mount-point mimetype
+      - Added File::MimeInfo::Applications and the mimeopen script
+      - Changed the order of checking for inodetype "symlink" and "directory"
+      as suggested by Jens Luedicke
+      - Fixed a few inaccuracies in the documentation
+
 0.11  Fri Mar 18 2005
       - Added an @DIRS to be able to overload the XDG_DATA_DIRS path
       - Fixed the code to let "mimetype" determine the mime-type of STDIN
@@ -18,8 +29,8 @@ Revision history for Perl extension File::MimeInfo.
       - Applied a spelling patch supplied by jgmyers at proofpoint.com
 
 0.10  Sun Feb 08 2004
-      - Stripped down test for IO objects, because it doesn't seem to be platform
-      independent enough
+      - Stripped down test for IO objects, because it doesn't seem to be
+      platform independent enough
       - ++'ing  version number to keep CPAN satisfied
 
 0.9   Fri Dec 05 2003

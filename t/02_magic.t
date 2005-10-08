@@ -4,15 +4,17 @@ no warnings;
 @File::MimeInfo::DIRS = ('./t/mime'); # forceing non default value
 
 opendir MAGIC, 't/magic/';
-my @files = grep {$_ !~ /\./ and $_ ne 'CVS'} readdir MAGIC;
+my @files = grep {$_ !~ /^\./ and $_ ne 'CVS'} readdir MAGIC;
 closedir MAGIC;
 
-Test::More->import( tests => (scalar(@files) + 1) );
+Test::More->import( tests => (2 * scalar(@files) + 1) );
 
 use_ok('File::MimeInfo::Magic', qw/mimetype magic/);
 
 for (@files) {
 	$type = $_;
 	$type =~ tr#_#/#;
-	ok( magic("t/magic/$_") eq $type, "magic typing of $_" )
+	$type =~ s#\.\w+$##;
+	ok( magic("t/magic/$_") eq $type, "magic typing of $_" );
+	ok( mimetype("t/magic/$_") eq $type, "complete (magic) typing of $_");
 }

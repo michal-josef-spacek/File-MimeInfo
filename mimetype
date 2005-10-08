@@ -1,7 +1,10 @@
 #!/usr/bin/perl
 
+eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
+    if 0; # not running under some shell
+
 use strict;
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 $|++;
 
 # ########## #
@@ -87,7 +90,6 @@ EOV
 	exit 0;
 }
 
-$args{stdin}++ if -p STDIN and ! @ARGV;
 complain(undef, 4) unless scalar(@ARGV) || $args{stdin} || $args{namefile};
 
 # ############# #
@@ -231,8 +233,9 @@ sub resolvelink { # --dereference
 }
 
 sub desc { # Cache desciption
-	return undef unless $_[0];
-	$desc{$_[0]} ||= describe($_[0]) || describe($_[0], '');
+	my $mt = shift;
+	return undef unless $mt;
+	$desc{$mt} ||= describe($mt) || describe($mt, ''); # second form overrules the language settings to default
 }
 
 __END__
@@ -361,6 +364,8 @@ Determine type of content from STDIN, less powerfull then normal file checking
 because it only uses magic typing. This will happen also if the STDIN filehandle
 is a pipe.
 
+To use this option L<IO::Scalar> needs to be installed.
+
 =item B<-v>, B<--version>
 
 Print the version of the program and exit.
@@ -431,9 +436,6 @@ mime-info database wasn't accesable. See L<File::MimeInfo> for more details.
 
 The '--all' switch doesn't really show all matches, but only one per
 mime-typing method. This needs to be implemnted in the modules first.
-
-Since the magic implementation currently only can handle seekable file handles
-reading from stdin wasn't implemented yet.
 
 =head1 BUGS
 

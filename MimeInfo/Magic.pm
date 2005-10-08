@@ -18,51 +18,71 @@ BEGIN {
 our @ISA = qw(Exporter File::MimeInfo);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(extensions describe globs inodetype magic);
-our $VERSION = '0.11';
+our $VERSION = '0.12';
 our $DEBUG;
 
-our (@magic, $max_buffer);
-# @magic is used to store parse tree of magic data
+our (@magic_80, @magic, $max_buffer);
+# @magic_80 and @magic are used to store the parse tree of magic data
+# @magic_80 contains magic rules with priority 80 and higher, @magic the rest
 # $max_buffer contains the maximum number of chars to be buffered from a non-seekable
 # filehandle in order to do magic mimetyping
 
 _rehash(); # initialize data
 
 # use Data::Dumper;
-# print Dumper \@magic;
+# print Dumper \@magic_80, \@magic;
 
 sub mimetype {
 	my $file = pop 
 		|| croak 'subroutine "mimetype" needs a filename as argument';
+
 	return magic($file) || default($file) if ref $file;
-	return
-		inodetype($file) ||
-		globs($file)     ||
-		magic($file)     ||
-		default($file);
+	return &File::MimeInfo::mimetype($file) unless -s $file and -r _;
+	
+	my ($mimet, $fh);
+	return $mimet if $mimet = inodetype($file);
+	
+	($mimet, $fh) = _magic($file, @magic_80); # high priority rules
+	return $mimet if $mimet;
+
+	return $mimet if $mimet = globs($file);
+
+	($mimet, $fh) = _magic($fh, @magic); # lower priority rules
+	close $fh unless ref $file;
+
+	return $mimet if $mimet;
+	return default($file);
 }
 
 sub magic {
 	my $file = pop || croak 'subroutine "magic" needs a filename as argument';
 	return undef unless ref($file) || -s $file;
-	print STDERR "> Checking magic rules\n" if $DEBUG;
+	print STDERR "> Checking all magic rules\n" if $DEBUG;
+	
+	my ($mimet, $fh) = _magic($file, @magic_80, @magic);
+	close $fh unless ref $file;
 
+	return $mimet;
+}
+
+sub _magic {
+	my ($file, @rules) = @_;
+	
 	my $fh;
 	unless (ref $file) {
 		open $fh, $file || return undef;
 		binmode $fh;
 	}
-	else { $fh = $file } # allowing for IO::Something
+	else { $fh = $file }
 
-	for my $type (@magic) {
+	for my $type (@rules) {
 		for (2..$#$type) {
 			next unless _check_rule($$type[$_], $fh, 0);
 			close $fh unless ref $file;
-			return $$type[1];
+			return ($$type[1], $fh);
 		}
 	}
-	close $fh unless ref $file;
-	return undef;
+	return (undef, $fh);
 }
 
 sub _check_rule {
@@ -107,7 +127,7 @@ sub rehash {
 }
 
 sub _rehash {
-	($max_buffer, @magic) = (0); # clear data
+	($max_buffer, @magic_80, @magic) = (0); # clear data
 	my @magicfiles = @File::MimeInfo::DIRS
 		? ( grep {-e $_ && -r $_} map "$_/magic", @File::MimeInfo::DIRS )
 		: ( reverse xdg_data_files('mime/magic')                        );
@@ -118,6 +138,9 @@ sub _rehash {
 		push @done, $file;
 	}
 	@magic = sort {$$b[0] <=> $$a[0]} @magic;
+	while ($magic[0][0] >= 80) {
+		push @magic_80, shift @magic;
+	}
 }
 
 sub _hash_magic {
@@ -127,7 +150,6 @@ sub _hash_magic {
 	binmode MAGIC;
 	<MAGIC> eq "MIME-Magic\x00\n"
 		or carp "Magic file '$file' doesn't seem to be a magic file";
-	@magic = ();
 	my $line = 1;
 	while (<MAGIC>) { 
 		$line++;
@@ -220,7 +242,10 @@ See also L<File::MimeInfo> for methods that are inherited.
 
 Returns a mime-type string for C<$file>, returns undef on failure.
 
-This method bundles C<inodetype>, C<globs> and C<magic>.
+This method bundles C<inodetype()>, C<globs()> and C<magic()>.
+
+Magic rules with an priority of 80 and higher are checked before
+C<globs()> is called, all other magic rules afterwards.
 
 If this doesn't work the file is read and the mime-type defaults
 to 'text/plain' or to 'application/octet-stream' when the first ten chars
@@ -261,8 +286,8 @@ Please mail the author when you encounter any bugs.
 
 Most likely to cause bugs is the fact that I partially used line based parsing
 while the source data is binary and can contain newlines on strange places.
-I tested with the 0.11 version of the database I found no problems, but I can think
-of configurations that can cause problems.
+I tested with the 0.11 version of the database and found no problems, but I
+can think of configurations that can cause problems.
 
 =head1 AUTHOR
 

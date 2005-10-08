@@ -2,17 +2,19 @@ package File::MimeInfo::Rox;
 
 use strict;
 use Carp;
+use File::BaseDir qw/xdg_config_home xdg_data_dirs/;
+use File::Spec;
 require Exporter;
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mime_exec mime_system);
 our @EXPORT_OK = qw(suggest_script_name);
 our %EXPORT_TAGS = (magic => \@EXPORT);
-our $VERSION = '0.1';
-our @choichespath = (
-	"$ENV{HOME}/Choices",
-	"/usr/local/share/Choices",
-	"/usr/share/Choices"
+our $VERSION = '0.2';
+our @choichespath = map File::Spec->catdir(@$_), (
+	[xdg_config_home(), 'rox.sourceforge.net'],
+	[$ENV{HOME}, 'Choices'],
+	(map [$_, 'Choices'], xdg_data_dirs())
 );
 our ($DEBUG);
 
