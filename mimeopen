@@ -1,7 +1,8 @@
 #!/usr/bin/perl
 
 use strict;
-our $VERSION = '0.01';
+use File::BaseDir;
+our $VERSION = '0.02';
 $|++;
 
 # ########## #
@@ -85,6 +86,22 @@ complain(undef, 4) unless scalar(@ARGV);
 # --database
 @File::MimeInfo::DIRS = split /:/, $args{database} if $args{database};
 
+# --debug
+if ($args{debug}) {
+	$File::MimeInfo::DEBUG++;
+	$File::MimeInfo::Magic::DEBUG++;
+	$File::MimeInfo::Applications::DEBUG++;
+	print STDERR "> mimeopen version $VERSION\n";
+	print STDERR '> Data dirs are: ', join( ', ', 
+			$args{database}
+				? ( split /:/, $args{database} )
+				: (
+					File::BaseDir::xdg_data_home(),
+					File::BaseDir::xdg_data_dirs()
+				)
+		), "\n";
+}
+
 ## Actually use our modules ##
 eval 'use File::MimeInfo::Magic qw/mimetype magic/;';
 die $@ if $@;
@@ -93,18 +110,12 @@ die $@ if $@;
 
 *default = \&File::MimeInfo::default;
 
-# --debug
 if ($args{debug}) {
-	$File::MimeInfo::DEBUG++;
-	$File::MimeInfo::Magic::DEBUG++;
-	print	'> Data dirs are: ', join( ', ', 
-			$args{database}
-				? ( split /:/, $args{database} )
-				: (
-					File::BaseDir::xdg_data_home(),
-					File::BaseDir::xdg_data_dirs()
-				)
-		), "\n";
+	no strict 'refs';
+	print STDERR "> $_ version ".${$_.'::VERSION'}."\n" for qw/
+		File::MimeInfo
+		File::MimeInfo::Magic
+		File::MimeInfo::Applications /;
 }
 
 # --dereference
@@ -156,9 +167,9 @@ if (@ARGV == 1 or $default->wants_list) {
 	$default->exec(@ARGV);
 }
 else {
-	my $first = shift @ARGV;
-	fork or $default->exec($_) for reverse @ARGV;
-	$default->exec($first);
+	my $last = pop @ARGV;
+	fork or $default->exec($_) for @ARGV;
+	$default->exec($last);
 }
 
 exit 7; # something went wrong in the exec
@@ -240,7 +251,13 @@ mimeopen [options] [-] files
 
 =head1 DESCRIPTION
 
-This script tries to determine the mimetype of a file and 
+This script tries to determine the mimetype of a file and open it with the
+default desktop application. If no default application is configured the
+user is prompted with an "open with" menu in the terminal.
+
+To use this script you need the freedestop mime-info database and the
+freedesktop desktop-file-utils package. See L<File::MimeInfo::Applications(3)>
+for more details.
 
 =head1 OPTIONS
 
@@ -314,5 +331,5 @@ L<mimetype(1)>,
 L<update-mime-database(1)>,
 L<update-desktop-database(1)>,
 L<File::MimeInfo(3)>,
-L<File::MimeInfo::Applications>
+L<File::MimeInfo::Applications(3)>
 

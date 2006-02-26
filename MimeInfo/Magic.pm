@@ -145,6 +145,7 @@ sub _rehash {
 
 sub _hash_magic {
 	my $file = shift;
+	print STDERR "> Hashing magic from $file\n" if $DEBUG;
 
 	open MAGIC, $file || croak "Could not open file '$file' for reading";
 	binmode MAGIC;

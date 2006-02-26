@@ -4,6 +4,7 @@ eval 'exec /usr/bin/perl  -S $0 ${1+"$@"}'
     if 0; # not running under some shell
 
 use strict;
+use File::BaseDir;
 our $VERSION = '0.12';
 $|++;
 
@@ -101,17 +102,12 @@ our %desc; # desc caching hash
 # --database
 @File::MimeInfo::DIRS = split /:/, $args{database} if $args{database};
 
-## Actually use our module ##
-eval 'use File::MimeInfo::Magic qw/mimetype globs inodetype magic describe/;';
-die $@ if $@;
-
-*default = \&File::MimeInfo::default;
-
 # --debug
 if ($args{debug}) {
 	$File::MimeInfo::DEBUG++;
 	$File::MimeInfo::Magic::DEBUG++;
-	print	'> Data dirs are: ', join( ', ', 
+	print STDERR "> mimetype version $VERSION\n";
+	print STDERR '> Data dirs are: ', join( ', ', 
 			$args{database}
 				? ( split /:/, $args{database} )
 				: (
@@ -121,6 +117,19 @@ if ($args{debug}) {
 		), "\n";
 }
 
+## Actually use our module ##
+eval 'use File::MimeInfo::Magic qw/mimetype globs inodetype magic describe/;';
+die $@ if $@;
+
+*default = \&File::MimeInfo::default;
+
+if ($args{debug}) {
+	no strict 'refs';
+	print STDERR "> $_ version ".${$_.'::VERSION'}."\n" for qw/
+		File::MimeInfo
+		File::MimeInfo::Magic /;
+}
+						
 # --file-compat
 $args{describe}++ if $args{'file-compat'} && !$args{mimetype};
 

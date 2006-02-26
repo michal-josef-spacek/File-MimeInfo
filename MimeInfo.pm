@@ -10,7 +10,7 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(extensions describe globs inodetype mimetype_canon mimetype_isa);
-our $VERSION = '0.12';
+our $VERSION = '0.13';
 our $DEBUG;
 
 our (@globs, %literal, %extension, %mime2ext, %aliases, %subclasses, $_hashed_aliases, $_hashed_subclasses, $LANG, @DIRS);
@@ -143,6 +143,7 @@ EOT
 
 sub _hash_globs {
 	my $file = shift;
+	print STDERR "> Hashing globs from $file\n" if $DEBUG;
 	open GLOB, $file || croak "Could not open file '$file' for reading" ;
 	binmode GLOB, ':utf8' unless $] < 5.008;
 	my ($string, $glob);

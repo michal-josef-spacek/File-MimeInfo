@@ -8,7 +8,7 @@ use File::MimeInfo qw/mimetype_canon mimetype_isa/;
 use File::DesktopEntry;
 require Exporter;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mime_applications mime_applications_all mime_applications_set_default);
@@ -54,6 +54,7 @@ sub mime_applications_set_default {
 		$text =~ s/[\n\r]?$/\n/; # just to be sure
 	}
 	else {
+		_mkdir($file);
 		$text = "[Default Applications]\n";
 	}
 
@@ -105,7 +106,7 @@ sub _read_list { # read list with "mime/type=foo.desktop;bar.desktop" format
 	my @list;
 	open LIST, "<$file" or croak "Could not read file: $file";
 	while (<LIST>) {
-		/^$mimetype=(.*)$/ or next;
+		/^\Q$mimetype\E=(.*)$/ or next;
 		push @list, grep defined($_), split ';', $1;
 	}
 	close LIST;
@@ -122,6 +123,21 @@ sub _find_file {
 		}
 	}
 	return undef;
+}
+
+sub _mkdir {
+	my $dir = shift;
+	return if -d $dir;
+	
+	my ($vol, $dirs, undef) = File::Spec->splitpath($dir);
+	my @dirs = File::Spec->splitdir($dirs);
+	my $path = File::Spec->catpath($vol, shift @dirs);
+	while (@dirs) {
+		mkdir $path; # fails silently
+		$path = File::Spec->catdir($path, shift @dirs);
+	}
+	
+	die "Could not create dir: $path\n" unless -d $path;
 }
 
 1;
@@ -174,8 +190,7 @@ the same defaults.
 
 =head1 EXPORT
 
-This module exports the methods C<mime_applications()> and
-C<mime_applications_set_default()>.
+All methods are exported by default.
 
 =head1 METHODS
 
@@ -190,6 +205,12 @@ applications that say they can handle this mimetype.
 If the first result is undefined there is no default application
 and it is good practise to ask the user which application he wants
 to use.
+
+=item C<mime_applications_all(MIMETYPE)>
+
+Like C<mime_applications()> but also takes into account applications that 
+can open mimetypes from which MIMETYPE inherits. Parent mimetypes tell
+something about the data format, all code inherits from text/plain for example.
 
 =item C<mime_applications_set_default(MIMETYPE, APPLICATION)>
 
@@ -208,10 +229,6 @@ At present the file with defaults is F<$XDG_DATA_HOME/applications/defaults.list
 This file is not specified in any spec and if it gets standardized it should
 probably be located in $XDG_CONFIG_HOME. For this module I tried to implement
 the status quo.
-
-If you *really* want to open a file and you have no application for it
-you could try all parent mimetype classes for the mimetype you got. See
-L<File::MimeInfo> to get these parent classes.
 
 =head1 BUGS
 
