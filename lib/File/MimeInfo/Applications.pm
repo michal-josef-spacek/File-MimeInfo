@@ -8,7 +8,7 @@ use File::MimeInfo qw/mimetype_canon mimetype_isa/;
 use File::DesktopEntry;
 require Exporter;
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mime_applications mime_applications_all mime_applications_set_default);
@@ -46,7 +46,7 @@ sub mime_applications_set_default {
 	my $file = File::Spec->catfile(xdg_data_home(), qw/applications defaults.list/);
 	my $text;
 	if (-f $file) {
-		open LIST, "<$file" or croak "Could not read file: $file";
+		open LIST, '<', $file or croak "Could not read file: $file";
 		while (<LIST>) {
 			$text .= $_ unless /^$mimetype=/;
 		}
@@ -58,7 +58,7 @@ sub mime_applications_set_default {
 		$text = "[Default Applications]\n";
 	}
 
-	open LIST, ">$file" or croak "Could not write file: $file";
+	open LIST, '>', $file or croak "Could not write file: $file";
 	print LIST $text;
 	print LIST "$mimetype=$desktop_file;\n";
 	close LIST or croak "Could not write file: $file";
@@ -104,9 +104,9 @@ sub _others {
 sub _read_list { # read list with "mime/type=foo.desktop;bar.desktop" format
 	my ($mimetype, $file) = @_;
 	my @list;
-	open LIST, "<$file" or croak "Could not read file: $file";
+	open LIST, '<', $file or croak "Could not read file: $file";
 	while (<LIST>) {
-		/^\Q$mimetype\E=(.*)$/ or next;
+		/^$mimetype=(.*)$/ or next;
 		push @list, grep defined($_), split ';', $1;
 	}
 	close LIST;
@@ -210,7 +210,7 @@ to use.
 
 Like C<mime_applications()> but also takes into account applications that 
 can open mimetypes from which MIMETYPE inherits. Parent mimetypes tell
-something about the data format, all code inherits from text/plain for example.
+aomething about the data format, all code inherits from text/plain for example.
 
 =item C<mime_applications_set_default(MIMETYPE, APPLICATION)>
 

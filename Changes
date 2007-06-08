@@ -1,9 +1,17 @@
 Revision history for Perl extension File::MimeInfo.
 Jaap Karssenberg <pardus@cpan.org>
 
-0.13  Sun Feb 26 2005
-      - Fixed a bug in F:M::Applications for mimetypes containing a '+'
-      - Fixed a bug in F:M::Applications when dir non-existent (debian #347462)
+0.14  Fri Jun 08 2007
+      - Changed syntax for open() to 3 argument form
+      - Fixed bug for filenames like "0"
+      - Fixed bug with "-l" for Win32
+      - Fixed bug with malformed utf8 chars in default() method
+        derived from suggestions by mcummings_gentoo.org and jonas_cpan.org
+      - Moved from Makefile.PL to Build.pl
+
+0.13  Mon Jan 30 2006
+      Version bump for File::MimeInfo to keep CPAN happy
+      - Fixed a bug with F:M::Applications when dir non-existent
 
 0.12  Sat Oct  8 2005
       Updated to version 0.13 of the shared mimeinfo specification

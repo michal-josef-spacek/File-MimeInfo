@@ -18,7 +18,7 @@ BEGIN {
 our @ISA = qw(Exporter File::MimeInfo);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(extensions describe globs inodetype magic);
-our $VERSION = '0.12';
+our $VERSION = '0.14';
 our $DEBUG;
 
 our (@magic_80, @magic, $max_buffer);
@@ -33,8 +33,8 @@ _rehash(); # initialize data
 # print Dumper \@magic_80, \@magic;
 
 sub mimetype {
-	my $file = pop 
-		|| croak 'subroutine "mimetype" needs a filename as argument';
+	my $file = pop; 
+	croak 'subroutine "mimetype" needs a filename as argument' unless defined $file;
 
 	return magic($file) || default($file) if ref $file;
 	return &File::MimeInfo::mimetype($file) unless -s $file and -r _;
@@ -42,12 +42,12 @@ sub mimetype {
 	my ($mimet, $fh);
 	return $mimet if $mimet = inodetype($file);
 	
-	($mimet, $fh) = _magic($file, @magic_80); # high priority rules
+	($mimet, $fh) = _magic($file, \@magic_80); # high priority rules
 	return $mimet if $mimet;
 
 	return $mimet if $mimet = globs($file);
 
-	($mimet, $fh) = _magic($fh, @magic); # lower priority rules
+	($mimet, $fh) = _magic($fh, \@magic); # lower priority rules
 	close $fh unless ref $file;
 
 	return $mimet if $mimet;
@@ -55,11 +55,12 @@ sub mimetype {
 }
 
 sub magic {
-	my $file = pop || croak 'subroutine "magic" needs a filename as argument';
+	my $file = pop;
+	croak 'subroutine "magic" needs a filename as argument' unless defined $file;
 	return undef unless ref($file) || -s $file;
 	print STDERR "> Checking all magic rules\n" if $DEBUG;
 	
-	my ($mimet, $fh) = _magic($file, @magic_80, @magic);
+	my ($mimet, $fh) = _magic($file, \@magic_80, \@magic);
 	close $fh unless ref $file;
 
 	return $mimet;
@@ -70,12 +71,12 @@ sub _magic {
 	
 	my $fh;
 	unless (ref $file) {
-		open $fh, $file || return undef;
+		open $fh, '<', $file || return undef;
 		binmode $fh;
 	}
 	else { $fh = $file }
 
-	for my $type (@rules) {
+	for my $type (map @$_, @rules) {
 		for (2..$#$type) {
 			next unless _check_rule($$type[$_], $fh, 0);
 			close $fh unless ref $file;
@@ -127,7 +128,7 @@ sub rehash {
 }
 
 sub _rehash {
-	($max_buffer, @magic_80, @magic) = (0); # clear data
+	($max_buffer, @magic_80, @magic) = (32); # clear data
 	my @magicfiles = @File::MimeInfo::DIRS
 		? ( grep {-e $_ && -r $_} map "$_/magic", @File::MimeInfo::DIRS )
 		: ( reverse xdg_data_files('mime/magic')                        );
@@ -145,9 +146,8 @@ sub _rehash {
 
 sub _hash_magic {
 	my $file = shift;
-	print STDERR "> Hashing magic from $file\n" if $DEBUG;
 
-	open MAGIC, $file || croak "Could not open file '$file' for reading";
+	open MAGIC, '<', $file || croak "Could not open file '$file' for reading";
 	binmode MAGIC;
 	<MAGIC> eq "MIME-Magic\x00\n"
 		or carp "Magic file '$file' doesn't seem to be a magic file";

@@ -1,7 +1,6 @@
 #!/usr/bin/perl
 
 use strict;
-use File::BaseDir;
 our $VERSION = '0.02';
 $|++;
 
@@ -86,22 +85,6 @@ complain(undef, 4) unless scalar(@ARGV);
 # --database
 @File::MimeInfo::DIRS = split /:/, $args{database} if $args{database};
 
-# --debug
-if ($args{debug}) {
-	$File::MimeInfo::DEBUG++;
-	$File::MimeInfo::Magic::DEBUG++;
-	$File::MimeInfo::Applications::DEBUG++;
-	print STDERR "> mimeopen version $VERSION\n";
-	print STDERR '> Data dirs are: ', join( ', ', 
-			$args{database}
-				? ( split /:/, $args{database} )
-				: (
-					File::BaseDir::xdg_data_home(),
-					File::BaseDir::xdg_data_dirs()
-				)
-		), "\n";
-}
-
 ## Actually use our modules ##
 eval 'use File::MimeInfo::Magic qw/mimetype magic/;';
 die $@ if $@;
@@ -110,12 +93,18 @@ die $@ if $@;
 
 *default = \&File::MimeInfo::default;
 
+# --debug
 if ($args{debug}) {
-	no strict 'refs';
-	print STDERR "> $_ version ".${$_.'::VERSION'}."\n" for qw/
-		File::MimeInfo
-		File::MimeInfo::Magic
-		File::MimeInfo::Applications /;
+	$File::MimeInfo::DEBUG++;
+	$File::MimeInfo::Magic::DEBUG++;
+	print	'> Data dirs are: ', join( ', ', 
+			$args{database}
+				? ( split /:/, $args{database} )
+				: (
+					File::BaseDir::xdg_data_home(),
+					File::BaseDir::xdg_data_dirs()
+				)
+		), "\n";
 }
 
 # --dereference

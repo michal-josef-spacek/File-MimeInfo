@@ -1,5 +1,5 @@
-File-MimeInfo version 0.12
-==========================
+File-MimeInfo
+=============
 
 This module can be used to determine the mime type of a file; it's a 
 replacement for File::MMagic trying to implement the freedesktop 
@@ -15,6 +15,12 @@ To install this module type the following:
    make
    make test
    make install
+
+or alternatively:
+
+   perl Build.pl
+   perl Build test
+   perl Build install
 
 DEPENDENCIES
 

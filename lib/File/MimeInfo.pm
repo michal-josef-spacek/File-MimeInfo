@@ -10,7 +10,7 @@ require Exporter;
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(extensions describe globs inodetype mimetype_canon mimetype_isa);
-our $VERSION = '0.13';
+our $VERSION = '0.14';
 our $DEBUG;
 
 our (@globs, %literal, %extension, %mime2ext, %aliases, %subclasses, $_hashed_aliases, $_hashed_subclasses, $LANG, @DIRS);
@@ -28,8 +28,8 @@ rehash(); # initialise data
 sub new { bless \$VERSION, shift } # what else is there to bless ?
 
 sub mimetype {
-	my $file = pop
-		|| croak 'subroutine "mimetype" needs a filename as argument';
+	my $file = pop;
+	croak 'subroutine "mimetype" needs a filename as argument' unless defined $file;
 	croak 'You should use File::MimeInfo::Magic to check open filehandles' if ref $file;
 	return 
 		inodetype($file) ||
@@ -42,7 +42,7 @@ sub inodetype {
 	print STDERR "> Checking inode type\n" if $DEBUG;
 	lstat $file or return undef;
 	return undef if -f _;
-	my $t =	(-l _) ? 'inode/symlink'     :
+	my $t =	(-l $file) ? 'inode/symlink' :  # Win32 does not like '_' here
 		(-d _) ? 'inode/directory'   :
 		(-p _) ? 'inode/fifo'        :
 		(-c _) ? 'inode/chardevice'  :
@@ -63,7 +63,8 @@ sub inodetype {
 }
 
 sub globs {
-	my $file = pop || croak 'subroutine "globs" needs a filename as argument';
+	my $file = pop;
+	croak 'subroutine "globs" needs a filename as argument' unless defined $file;
 	(undef, undef, $file) = File::Spec->splitpath($file); # remove path
 	print STDERR "> Checking globs for basename '$file'\n" if $DEBUG;
 
@@ -94,7 +95,8 @@ sub globs {
 }
 
 sub default {
-	my $file = pop || croak 'subroutine "default" needs a filename as argument';
+	my $file = pop;
+	croak 'subroutine "default" needs a filename as argument' unless defined $file;
 	
 	my $line;
 	unless (ref $file) {
@@ -102,22 +104,29 @@ sub default {
 		print STDERR "> File exists, trying default method\n" if $DEBUG;
 		return 'text/plain' if -z $file;
 	
-		open FILE, $file || return undef;
+		open FILE, '<', $file || return undef;
 		binmode FILE, ':utf8' unless $] < 5.008;
-		read FILE, $line, 10;
+		read FILE, $line, 32;
 		close FILE;
 	}
 	else {
 		print STDERR "> Trying default method on object\n" if $DEBUG;
 
 		$file->seek(0, SEEK_SET);
-		$file->read($line, 10);
+		$file->read($line, 32);
 	}
 
 	{
-		no warnings; # warnings can be thrown when input is neither ascii or utf8
-		$line =~ s/\s//g; # \n and \t are also control chars
-		return 'text/plain' unless $line =~ /[\x00-\x1F\xF7]/;
+		no warnings; # warnings can be thrown when input not ascii
+		if ($] < 5.008 or ! utf8::valid($line)) {
+			use bytes; # avoid invalid utf8 chars
+			$line =~ s/\s//g; # \m, \n and \t are also control chars
+			return 'text/plain' unless $line =~ /[\x00-\x1F\xF7]/;
+		}
+		else {
+			# use perl to do something intelligent for ascii & utf8
+			return 'text/plain' unless $line =~ /[^[:print:]\s]/;
+		}	
 	}
 	print STDERR "> First 10 bytes of the file contain control chars\n" if $DEBUG;
 	return 'application/octet-stream';
@@ -129,9 +138,8 @@ sub rehash {
 		? ( grep {-e $_ && -r $_} map "$_/globs", @DIRS )
 		: ( reverse xdg_data_files('mime/globs')        );
 	print STDERR << 'EOT' unless @globfiles;
-WARNING: You don't seem to have a mime-info database.
-The shared-mime-info package is available from
-http://freedesktop.org/wiki/Software_2fshared_2dmime_2dinfo
+WARNING: You don't seem to have a mime-info database. The
+shared-mime-info package is available from http://freedesktop.org/ .
 EOT
 	my @done;
 	for my $file (@globfiles) {
@@ -143,8 +151,7 @@ EOT
 
 sub _hash_globs {
 	my $file = shift;
-	print STDERR "> Hashing globs from $file\n" if $DEBUG;
-	open GLOB, $file || croak "Could not open file '$file' for reading" ;
+	open GLOB, '<', $file || croak "Could not open file '$file' for reading" ;
 	binmode GLOB, ':utf8' unless $] < 5.008;
 	my ($string, $glob);
 	while (<GLOB>) {
@@ -189,7 +196,7 @@ sub describe {
 		: ( reverse xdg_data_files('mime', split '/', "$mt.xml") ) ;
 	for my $file (@descfiles) {
 		$desc = ''; # if a file was found, return at least empty string
-		open XML, $file || croak "Could not open file '$file' for reading";
+		open XML, '<', $file || croak "Could not open file '$file' for reading";
 		binmode XML, ':utf8' unless $] < 5.008;
 		while (<XML>) {
 			next unless m!<comment\s*$att>(.*?)</comment>!;
@@ -203,7 +210,8 @@ sub describe {
 }
 
 sub mimetype_canon {
-	my $mimet = pop || croak 'mimetype_canon needs argument';
+	my $mimet = pop;
+	croak 'mimetype_canon needs argument' unless defined $mimet;
 	rehash_aliases() unless $_hashed_aliases;
 	return exists($aliases{$mimet}) ? $aliases{$mimet} : $mimet;
 }
@@ -221,7 +229,7 @@ sub _read_map_files {
 	my (@done, %map);
 	for my $file (@files) {
 		next if grep {$_ eq $file} @done;
-		open MAP, $file || croak "Could not open file '$file' for reading";
+		open MAP, '<', $file || croak "Could not open file '$file' for reading";
 		binmode MAP, ':utf8' unless $] < 5.008;
 		while (<MAP>) {
 			next if /^\s*#/ or ! /\S/; # skip comments and empty lines
@@ -332,6 +340,16 @@ Returns undef on failure. The file doesn't need to exist.
 
 Behaviour in list context (wantarray) is unspecified and will change in future
 releases.
+
+=item C<default($file)>
+
+This method decides whether a file is binary or plain text by looking at
+the first few bytes in the file. Used to decide between "text/plain" and
+"application/octet-stream" if all other methods have failed.
+
+The spec states that we should check for the ascii control chars and let
+higher bit chars pass to allow utf8. We try to be more intelligent using
+perl utf8 support.
 
 =item C<extensions($mimetype)>
 
@@ -446,13 +464,13 @@ L<File::MMagic>
 
 =item freedesktop specifications used
 
-L<http://freedesktop.org/wiki/Standards_2fshared_2dmime_2dinfo_2dspec>,
-L<http://freedesktop.org/wiki/Standards_2fbasedir_2dspec>,
-L<http://freedesktop.org/wiki/Standards_2fdesktop_2dentry_2dspec>
+L<http://www.freedesktop.org/wiki/Specifications/shared-mime-info-spec>,
+L<http://www.freedesktop.org/wiki/Specifications/basedir-spec>,
+L<http://www.freedesktop.org/wiki/Specifications/desktop-entry-spec>
 
 =item freedesktop mime database
 
-L<http://freedesktop.org/wiki/Software_2fshared_2dmime_2dinfo>
+L<http://www.freedesktop.org/wiki/Software/shared-mime-info>
 
 =item other programs using this mime system
 
