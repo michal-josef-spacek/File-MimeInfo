@@ -11,6 +11,7 @@ use_ok('File::MimeInfo', qw/mimetype describe globs/); # 1
 # test what was read
 {
 	no warnings; # don't bug me because I use these vars only once
+	File::MimeInfo::rehash();
 	ok(scalar(keys %File::MimeInfo::literal) == 1, 'literal data is there');	# 2
 	ok(scalar(@File::MimeInfo::globs) == 1, 'globs data is there');			# 3
 }

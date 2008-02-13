@@ -8,13 +8,14 @@ use_ok('File::MimeInfo', qw/extensions mimetype_canon mimetype_isa/); # 1
 
 ## test reverse extension lookup
 
-{
-	no warnings; # don't bug me because I use these vars only once
-	ok(scalar(keys %File::MimeInfo::extension) == 6, 'extension data is there');    # 2
-}
-
 ok( extensions('text/plain') eq 'asc', 'extenions works'); # 2
-is_deeply( [extensions('text/plain')], [qw#asc txt#], 'wantarray extensions works' ); # 4
+is_deeply( [extensions('text/plain')], [qw#asc txt#], 'wantarray extensions works' ); # 3
+
+{
+	# call above should have triggered rehash()
+	no warnings; # don't bug me because I use these vars only once
+	ok(scalar(keys %File::MimeInfo::extension) == 6, 'extension data is there');    # 4
+}
 
 ## test alias lookup
 ok(mimetype_canon('text/plain') eq 'text/plain', 'canon is transparent'); # 5
@@ -28,7 +29,7 @@ ok(mimetype_isa('application/x-perl', 'application/x-executable'), 'subclass for
 is_deeply([mimetype_isa('application/x-perl')], [qw(application/x-executable text/plain application/octet-stream)], 'subclass list from file'); # 11
 
 
-## Tests for Apllications
+## Tests for Applications
 SKIP: {
 	eval { require File::DesktopEntry };
 	skip "File::DesktopEntry not installed", 3 if $@;

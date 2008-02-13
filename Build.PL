@@ -5,7 +5,6 @@ use Module::Build;
 my $build = Module::Build->new(
 	dist_name => 'File-MimeInfo',
 	dist_version_from => 'lib/File/MimeInfo.pm',
-	dist_abstract => 'Module to determine file types',
 	dist_author => 'Jaap Karssenberg <pardus@cpan.org>',
 	license => 'perl',
 	script_files => ['mimetype', 'mimeopen'],
@@ -14,13 +13,10 @@ my $build = Module::Build->new(
 		'Exporter'	=> 0,
 		'Fcntl'		=> 0,
 		'Pod::Usage'	=> 0,
-		'File::BaseDir'	=> 0,
+		'File::BaseDir'	=> '0.03',
+		'File::DesktopEntry' => '0.04',
 	},
-	recommends => {
-		'File::DesktopEntry' => 0,
-	},
-	#build_requires => {
-	#},
+	#build_requires => {},
 	create_makefile_pl => 'passthrough',
 	#dynamic_config => 1,
 );

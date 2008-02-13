@@ -3,17 +3,20 @@ package File::MimeInfo::Applications;
 use strict;
 use Carp;
 use File::Spec;
-use File::BaseDir qw/xdg_data_home xdg_data_dirs xdg_data_files/;
+use File::BaseDir qw/data_home data_dirs data_files/;
 use File::MimeInfo qw/mimetype_canon mimetype_isa/;
 use File::DesktopEntry;
 require Exporter;
 
-our $VERSION = '0.03';
+our $VERSION = '0.15';
 
 our @ISA = qw(Exporter);
-our @EXPORT = qw(mime_applications mime_applications_all mime_applications_set_default);
+our @EXPORT = qw(
+	mime_applications mime_applications_all
+	mime_applications_set_default mime_applications_set_custom
+);
 
-print STDERR << 'EOT' unless xdg_data_files(qw/applications mimeinfo.cache/);
+print STDERR << 'EOT' unless data_files(qw/applications mimeinfo.cache/);
 WARNING: You don't seem to have any mimeinfo.cache files.
 Try running the update-desktop-database command. If you
 don't have this command you should install the 
@@ -36,37 +39,51 @@ sub mime_applications_all {
 }
 
 sub mime_applications_set_default {
-	croak "usage: mime_applications_set_default(MIMETYPE, APPLICATION)" unless @_ == 2;
+	croak "usage: mime_applications_set_default(MIMETYPE, APPLICATION)"
+		unless @_ == 2;
 	my ($mimetype, $desktop_file) = @_;
-	(undef, undef, $desktop_file) = File::Spec->splitpath($desktop_file->{file})
+	(undef, undef, $desktop_file) =
+		File::Spec->splitpath($desktop_file->{file})
 		if ref $desktop_file;
-	croak "missing desktop entry filename for application" unless length $desktop_file;
+	croak "missing desktop entry filename for application"
+		unless length $desktop_file;
 	$desktop_file .= '.desktop' unless $desktop_file =~ /\.desktop$/;
+	_write_list($mimetype, $desktop_file);
+}
 
-	my $file = File::Spec->catfile(xdg_data_home(), qw/applications defaults.list/);
-	my $text;
-	if (-f $file) {
-		open LIST, '<', $file or croak "Could not read file: $file";
-		while (<LIST>) {
-			$text .= $_ unless /^$mimetype=/;
-		}
-		close LIST;
-		$text =~ s/[\n\r]?$/\n/; # just to be sure
-	}
-	else {
-		_mkdir($file);
-		$text = "[Default Applications]\n";
+sub mime_applications_set_custom {
+	croak "usage: mime_applications_set_custom(MIMETYPE, COMMAND)"
+		unless @_ == 2;
+	my ($mimetype, $command) = @_;
+	$command =~ /(\w+)/;
+	my $word = $1 or croak "COMMAND does not contain a word !?";
+
+	# Algorithm to generate name copied from other implementations
+	my $i = 1;
+	my $desktop_file =
+		data_home('applications', $word.'-usercreated-'.$i.'.desktop');
+	while (-e $desktop_file) {
+		$i++;
+		$desktop_file =
+		data_home('applications', $word.'-usercreated-'.$i.'.desktop');
 	}
 
-	open LIST, '>', $file or croak "Could not write file: $file";
-	print LIST $text;
-	print LIST "$mimetype=$desktop_file;\n";
-	close LIST or croak "Could not write file: $file";
+	my $object = File::DesktopEntry->new();
+	$object->set(
+		Type      => 'Application',
+		Name      => $word,
+		NoDsiplay => 'true',
+		Exec      => $command,
+	);
+	my (undef, undef, $df) = File::Spec->splitpath($desktop_file);
+	_write_list($mimetype, $df); # creates dir if needed
+	$object->write($desktop_file);
+	return $object;
 }
 
 sub _default {
 	my $mimetype = shift;
-	my $file = File::Spec->catfile(xdg_data_home(), qw/applications defaults.list/);
+	my $file = data_home(qw/applications defaults.list/);
 	return undef unless -f $file && -r _;
 	
 	$Carp::CarpLevel++;
@@ -82,10 +99,7 @@ sub _others {
 	
 	$Carp::CarpLevel++;
 	my (@list, @done);
-	for my $dir (
-		map File::Spec->catdir($_, 'applications'),
-		xdg_data_home(), xdg_data_dirs()
-	) {
+	for my $dir (data_dirs('applications')) {
 		my $cache = File::Spec->catfile($dir, 'mimeinfo.cache');
 		next if grep {$_ eq $cache} @done;
 		push @done, $cache;
@@ -93,7 +107,7 @@ sub _others {
 		for (_read_list($mimetype, $cache)) {
 			my $file = File::Spec->catfile($dir, $_);
 			next unless -f $file and -r _;
-			push @list, File::DesktopEntry->new_from_file($file);
+			push @list, File::DesktopEntry->new($file);
 		}
 	}
 	$Carp::CarpLevel--;
@@ -114,13 +128,34 @@ sub _read_list { # read list with "mime/type=foo.desktop;bar.desktop" format
 	return @list;
 }
 
+sub _write_list {
+	my ($mimetype, $desktop_file) = @_;
+	my $file = data_home(qw/applications defaults.list/);
+	my $text;
+	if (-f $file) {
+		open LIST, '<', $file or croak "Could not read file: $file";
+		while (<LIST>) {
+			$text .= $_ unless /^$mimetype=/;
+		}
+		close LIST;
+		$text =~ s/[\n\r]?$/\n/; # just to be sure
+	}
+	else {
+		_mkdir($file);
+		$text = "[Default Applications]\n";
+	}
+
+	open LIST, '>', $file or croak "Could not write file: $file";
+	print LIST $text;
+	print LIST "$mimetype=$desktop_file;\n";
+	close LIST or croak "Could not write file: $file";
+}
+
 sub _find_file {
 	my @list = shift;
 	for (@list) {
-		for (xdg_data_files('applications', $_)) {
-			next unless -f $_ and -r _;
-			return File::DesktopEntry->new_from_file($_);
-		}
+		my $file = data_files('applications', $_);
+		return File::DesktopEntry->new($file) if $file;
 	}
 	return undef;
 }
@@ -180,10 +215,10 @@ This module depends on L<File::DesktopEntry> being installed.
 To use this module effectively you need to have the desktop-file-utils
 package from freedesktop and run update-desktop-database after installing
 new .desktop files.
-See L<http://freedesktop.org/wiki/Software_2fdesktop_2dfile_2dutils>.
+See L<http://www.freedesktop.org/wiki/Software/desktop-file-utils>.
 
-At the moment of writing this module is compatible with the way nautilus (Gnome)
-handles mimetypes and with thunar. I understand KDE 
+At the moment of writing this module is compatible with the way Nautilus (Gnome)
+and with Thunar (XFCE) handle applications for mimetypes. I understand KDE 
 is still working on implementing the freedesktop mime specifications but will
 follow. At the very least all perl applications using this module are using
 the same defaults.
@@ -221,14 +256,25 @@ appliction.
 APPLICATION can either be a File::DesktopEntry object or 
 the basename of a .desktop file.
 
+=item C<mime_applications_set_custom(MIMETYPE, COMMAND)>
+
+Save a custom shell command as default application.
+Generates a DesktopEntry file on the fly and calls
+C<mime_applications_set_custom>.
+Returns the DesktopEntry object.
+
+No checks are done at all on COMMAND.
+It should however contain at least one word.
+
 =back
 
 =head1 NOTES
 
-At present the file with defaults is F<$XDG_DATA_HOME/applications/defaults.list>.
-This file is not specified in any spec and if it gets standardized it should
-probably be located in $XDG_CONFIG_HOME. For this module I tried to implement
-the status quo.
+At present the file with defaults is
+F<$XDG_DATA_HOME/applications/defaults.list>.
+This file is not specified in any freedesktop spec and if it gets standardized
+it should probably be located in C<$XDG_CONFIG_HOME>. For this module I tried
+to implement the status quo.
 
 =head1 BUGS
 
@@ -238,7 +284,7 @@ Please mail the author when you encounter any bugs.
 
 Jaap Karssenberg || Pardus [Larus] E<lt>pardus@cpan.orgE<gt>
 
-Copyright (c) 2005 Jaap G Karssenberg. All rights reserved.
+Copyright (c) 2005,2008 Jaap G Karssenberg. All rights reserved.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 

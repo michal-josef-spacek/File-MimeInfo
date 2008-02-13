@@ -1,5 +1,4 @@
 use Test::More;
-
 use File::BaseDir qw/xdg_data_dirs/;
 $ENV{XDG_DATA_DIRS} = join ':', 'share', xdg_data_dirs;
 

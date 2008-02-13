@@ -2,9 +2,10 @@ require Test::More;
 
 no warnings;
 @File::MimeInfo::DIRS = ('./t/mime'); # forceing non default value
+#$File::MimeInfo::DEBUG = 1;
 
 opendir MAGIC, 't/magic/';
-my @files = grep {$_ !~ /^\./ and $_ ne 'CVS'} readdir MAGIC;
+my @files = grep {$_ !~ /^\./} readdir MAGIC;
 closedir MAGIC;
 
 Test::More->import( tests => (2 * scalar(@files) + 1) );

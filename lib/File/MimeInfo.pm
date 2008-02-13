@@ -4,16 +4,18 @@ use strict;
 use Carp;
 use Fcntl 'SEEK_SET';
 use File::Spec;
-use File::BaseDir qw/xdg_data_files/;
+use File::BaseDir qw/data_files/;
 require Exporter;
 
 our @ISA = qw(Exporter);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(extensions describe globs inodetype mimetype_canon mimetype_isa);
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 our $DEBUG;
 
-our (@globs, %literal, %extension, %mime2ext, %aliases, %subclasses, $_hashed_aliases, $_hashed_subclasses, $LANG, @DIRS);
+our ($_hashed, $_hashed_aliases, $_hashed_subclasses);
+our (@globs, %literal, %extension, %mime2ext, %aliases, %subclasses); 
+our ($LANG, @DIRS);
 # @globs = [ [ 'glob', qr//, $mime_string ], ... ]
 # %literal contains literal matches
 # %extension contains extensions (globs matching /^\*(\.\w)+$/ )
@@ -22,8 +24,6 @@ our (@globs, %literal, %extension, %mime2ext, %aliases, %subclasses, $_hashed_al
 # %subclasses contains the subclasses table
 # $LANG can be used to set a default language for the comments
 # @DIRS can be used to specify custom database directories
-
-rehash(); # initialise data
 
 sub new { bless \$VERSION, shift } # what else is there to bless ?
 
@@ -65,6 +65,7 @@ sub inodetype {
 sub globs {
 	my $file = pop;
 	croak 'subroutine "globs" needs a filename as argument' unless defined $file;
+	rehash() unless $_hashed;
 	(undef, undef, $file) = File::Spec->splitpath($file); # remove path
 	print STDERR "> Checking globs for basename '$file'\n" if $DEBUG;
 
@@ -121,7 +122,7 @@ sub default {
 		if ($] < 5.008 or ! utf8::valid($line)) {
 			use bytes; # avoid invalid utf8 chars
 			$line =~ s/\s//g; # \m, \n and \t are also control chars
-			return 'text/plain' unless $line =~ /[\x00-\x1F\xF7]/;
+			return 'text/plain' unless $line =~ /[\x00-\x1F\x7F]/;
 		}
 		else {
 			# use perl to do something intelligent for ascii & utf8
@@ -133,10 +134,11 @@ sub default {
 }
 
 sub rehash {
-	(@globs, %literal, %extension, %mime2ext, %aliases, %subclasses, $_hashed_aliases, $_hashed_subclasses) = (); # clear all data
+	(@globs, %literal, %extension, %mime2ext) = (); # clear all data
+	local $_; # limit scope of $_ ... :S
 	my @globfiles = @DIRS
 		? ( grep {-e $_ && -r $_} map "$_/globs", @DIRS )
-		: ( reverse xdg_data_files('mime/globs')        );
+		: ( reverse data_files('mime/globs')        );
 	print STDERR << 'EOT' unless @globfiles;
 WARNING: You don't seem to have a mime-info database. The
 shared-mime-info package is available from http://freedesktop.org/ .
@@ -147,6 +149,7 @@ EOT
 		_hash_globs($file);
 		push @done, $file;
 	}
+	$_hashed = 1;
 }
 
 sub _hash_globs {
@@ -178,6 +181,7 @@ sub _glob_to_regexp {
 
 sub extensions {
 	my $mimet = mimetype_canon(pop @_);
+	rehash() unless $_hashed;
         my $ref = $mime2ext{$mimet} if exists $mime2ext{$mimet};
 	return $ref ? @{$ref}    : undef if wantarray;
         return $ref ? @{$ref}[0] : '';
@@ -193,7 +197,7 @@ sub describe {
 	my $desc;
 	my @descfiles = @DIRS
 		? ( grep {-e $_ && -r $_} map "$_/$mt.xml", @DIRS        )
-		: ( reverse xdg_data_files('mime', split '/', "$mt.xml") ) ;
+		: ( reverse data_files('mime', split '/', "$mt.xml") ) ;
 	for my $file (@descfiles) {
 		$desc = ''; # if a file was found, return at least empty string
 		open XML, '<', $file || croak "Could not open file '$file' for reading";
@@ -225,7 +229,7 @@ sub _read_map_files {
 	my ($name, $list) = @_;
 	my @files = @DIRS
 		? ( grep {-e $_ && -r $_} map "$_/$name", @DIRS )
-		: ( reverse xdg_data_files("mime/$name")        );
+		: ( reverse data_files("mime/$name")        );
 	my (@done, %map);
 	for my $file (@files) {
 		next if grep {$_ eq $file} @done;
@@ -300,6 +304,9 @@ used. The L<File::MimeInfo::Magic> package is provided for magic typing.
 
 If you want to detemine the mimetype of data in a memory buffer you should
 use L<File::MimeInfo::Magic> in combination with L<IO::Scalar>.
+
+This module loads the various data files when needed. If you want to
+hash data ealier see the C<rehash> methods below.
 
 =head1 EXPORT
 
@@ -445,7 +452,7 @@ Please mail the author when you encounter any bugs.
 
 Jaap Karssenberg || Pardus [Larus] E<lt>pardus@cpan.orgE<gt>
 
-Copyright (c) 2003 Jaap G Karssenberg. All rights reserved.
+Copyright (c) 2003,2008 Jaap G Karssenberg. All rights reserved.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
@@ -471,10 +478,6 @@ L<http://www.freedesktop.org/wiki/Specifications/desktop-entry-spec>
 =item freedesktop mime database
 
 L<http://www.freedesktop.org/wiki/Software/shared-mime-info>
-
-=item other programs using this mime system
-
-L<http://rox.sourceforge.net>
 
 =back
 

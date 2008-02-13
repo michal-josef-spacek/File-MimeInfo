@@ -1,9 +1,9 @@
 ---
 name: File-MimeInfo
-version: 0.14
+version: 0.15
 author:
   - 'Jaap Karssenberg <pardus@cpan.org>'
-abstract: Module to determine file types
+abstract: Determine file type
 license: perl
 resources:
   license: http://dev.perl.org/licenses/
@@ -11,23 +11,22 @@ requires:
   Carp: 0
   Exporter: 0
   Fcntl: 0
-  File::BaseDir: 0
+  File::BaseDir: 0.03
+  File::DesktopEntry: 0.04
   Pod::Usage: 0
-recommends:
-  File::DesktopEntry: 0
 provides:
   File::MimeInfo:
     file: lib/File/MimeInfo.pm
-    version: 0.14
+    version: 0.15
   File::MimeInfo::Applications:
     file: lib/File/MimeInfo/Applications.pm
-    version: 0.03
+    version: 0.15
   File::MimeInfo::Magic:
     file: lib/File/MimeInfo/Magic.pm
-    version: 0.14
+    version: 0.15
   File::MimeInfo::Rox:
     file: lib/File/MimeInfo/Rox.pm
-    version: 0.2
+    version: 0.15
 generated_by: Module::Build version 0.2806
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html

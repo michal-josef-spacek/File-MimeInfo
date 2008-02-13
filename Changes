@@ -1,6 +1,20 @@
 Revision history for Perl extension File::MimeInfo.
 Jaap Karssenberg <pardus@cpan.org>
 
+0.15  Wed Feb 13 2008
+      A special thanks to Chapman Flack for bug reports and patches.
+      - Added some empty pod declarations to satisfy Pod::Coverage (RT 33099)
+      - Fixed typo \xF7 => \x7F in ascii control char check (RT 30959)
+      - Adapted new File::BaseDir API
+      - Added DesktopEntry as a mandatory dependency
+      - Added support for endian conversion (RT 28618)
+      - Fixed mask behavior by making it a bit-wise regex (RT 28620 28635)
+      - Reduced range by 1 byte to match ref implementation (RT 28634)
+      - Added "--no-ask" switch to the mimeopen command
+      - Added "mime_applications_custom()" to set custom commands
+      - Made Magic load magic data when needed, not at startup
+      - Made MimeInfo load glob data when needed, not at startup
+
 0.14  Fri Jun 08 2007
       - Changed syntax for open() to 3 argument form
       - Fixed bug for filenames like "0"

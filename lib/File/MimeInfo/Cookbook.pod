@@ -10,7 +10,7 @@ module:
 
 =over
 
-=item Matching an extension
+=item B<Matching an extension>
 
 A file does not have to actually exist in order to get a
 mimetype for it. This means that the following will work:
@@ -18,7 +18,7 @@ mimetype for it. This means that the following will work:
   my $extension = '*.txt';
   my $mimetype = mimetype( $extension );
 
-=item Mimetyping an scalar
+=item B<Mimetyping an scalar>
 
 If you want to find the mimetype of a scalar value you need magic
 mimetyping; after all a scalar doesn't have a filename or inode.
@@ -30,13 +30,16 @@ What you need to do is to use IO::Scalar :
   my $io_scalar = new IO::Scalar \$data;
   my $mimetype = mimetype( $io_scalar );
 
-In fact most other IO:: will work as long as they support the C<seek()>
+In fact most other C<IO::> will work as long as they support the C<seek()>
 and C<read()> methods. Of course if you want really obscure things to
 happen you can always write your own IO object and feed it in there.
 
-=item Mimetyping a filehandle
+Be aware that when using a filehandle like this you need to set the C<:utf8>
+binmode yourself if apropriate.
 
-Regrettably for non-seekable filehandles like STDIN simply using an IO::
+=item B<Mimetyping a filehandle>
+
+Regrettably for non-seekable filehandles like STDIN simply using an C<IO::>
 object will not work. You will need to buffer enough of the data for a proper
 mimetyping. For example you could mimetype data from STDIN like this:
 
@@ -48,7 +51,10 @@ mimetyping. For example you could mimetype data from STDIN like this:
   my $io_scalar = new IO::Scalar \$data;
   my $mimetype = mimetype( $io_scalar );
 
-=item Creating a new filename
+Be aware that when using a filehandle like this you need to set the C<:utf8>
+binmode yourself if apropriate.
+
+=item B<Creating a new filename>
 
 Say you have a temporary file that you want to save with a more
 proper filename.
@@ -63,7 +69,7 @@ proper filename.
   $newfile .= '.'.$extension if length $extension;
   move($tmpfile, $newfile);
 
-=item Force the use of a certain database directory
+=item B<Force the use of a certain database directory>
 
 Normally you just need to add the dir where your mime database lives
 to either the XDG_DATA_HOME or XDG_DATA_DIRS environment variables
@@ -89,7 +95,7 @@ while leaving other XDG configuration stuff alone.
 
 Jaap Karssenberg (Pardus) E<lt>pardus@cpan.orgE<gt>
 
-Copyright (c) 2005 Jaap G Karssenberg. All rights reserved.
+Copyright (c) 2005,2008 Jaap G Karssenberg. All rights reserved.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 

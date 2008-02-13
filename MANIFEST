@@ -28,6 +28,7 @@ t/default/encoding_breakage
 t/default/plain_text
 t/default/utf8_text
 t/magic/application_msword
+t/magic/application_vnd.corel-draw
 t/magic/application_x-executable
 t/magic/application_x-perl
 t/magic/application_x-perl.txt

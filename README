@@ -40,10 +40,11 @@ your system :
   Pod::Usage
   File::Basename
   File::BaseDir
+  File::DesktopEntry
 
 COPYRIGHT AND LICENCE
 
-Copyright (c) 2003 Jaap G Karssenberg. All rights reserved.
+Copyright (c) 2003,2008 Jaap G Karssenberg. All rights reserved.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 

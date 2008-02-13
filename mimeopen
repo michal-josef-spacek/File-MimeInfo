@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 
 use strict;
-our $VERSION = '0.02';
+our $VERSION = '0.15';
 $|++;
 
 # ########## #
@@ -20,6 +20,7 @@ my %opts = (
 	'magic-only'	=> ['M'],
 	'ask'		=> ['a'],
 	'ask-default'	=> ['d'],
+	'no-ask'	=> ['n'],
 );
 
 while ((@ARGV) && ($ARGV[0] =~ /^-/)) {
@@ -65,7 +66,7 @@ if ($args{help} || $args{usage}) {
 
 if ($args{version}) {
 	print "mimeopen $VERSION\n\n", << 'EOV';
-Copyright (c) 2005 Jaap G Karssenberg. All rights reserved.
+Copyright (c) 2005,2008 Jaap G Karssenberg. All rights reserved.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl.
 
@@ -139,7 +140,10 @@ unless($default or @other) {
 	exit 6;
 }
 
-if ($args{ask}) {
+if    ($args{'no-ask'}) {
+	$default = defined($default) ? $default : $other[0];
+}
+elsif ($args{'ask'}) {
 	$default = choose($mimetype, 0, grep defined($_), $default, @other);
 }
 elsif ($args{'ask-default'}) {
@@ -168,13 +172,14 @@ exit 7; # something went wrong in the exec
 # ########### #
 
 sub choose {
-	my ($mime, $is_default, @app) = @_;
-	print $is_default ?
+	my ($mime, $set_default, @app) = @_;
+	print $set_default ?
 		"Please choose a default application for files of type $mime\n\n" :
 		"Please choose an application\n\n" ;
 	my @done;
 	for my $i (0 .. $#app) {
-		my (undef, undef, $file) = File::Spec->splitpath( $app[$i]->{file} );
+		my (undef, undef, $file) =
+			File::Spec->splitpath( $app[$i]->{file} );
 		$file =~ s/\.desktop$//;
 		if (grep {$_ eq $file} @done) {
 			$app[$i] = undef;
@@ -182,10 +187,11 @@ sub choose {
 		else {
 			push @done, $file;
 			print "\t", scalar(@done), ") ",
-				$app[$i]->get_value('Name'), "  ($file) \n";
+				$app[$i]->get_value('Name'), "  ($file)\n";
 		}
 	}
 	@app = grep defined($_), @app;
+	print "\t", scalar(@done)+1, ") Other...\n" if $set_default;
 	print "\nuse application #";
 	my $c = <STDIN>;
 	chomp $c;
@@ -194,13 +200,26 @@ sub choose {
 		print STDERR "Cancelled\n";
 		exit 8;
 	}
-	$c--;
+	$c--; # base-1 => base-0
 
-	if ($is_default) {
-		eval { mime_applications_set_default($mime => $app[$c]) };
-		warn if $@;
+	if ($set_default and $c == scalar(@done)) {
+		# ask for custom command
+		print "use command: ";
+		my $cmd = <STDIN>;
+		chomp $cmd;
+		push @app,
+			eval { mime_applications_set_custom($mime => $cmd) };
+		warn $@ if $@;
 	}
-	
+	elsif ($c > scalar(@app)) {
+		print STDERR "Cancelled\n";
+		exit 8;
+	}
+	elsif ($set_default) {
+		eval { mime_applications_set_default($mime => $app[$c]) };
+		warn $@ if $@;
+	}
+
 	return $app[$c];
 }
 
@@ -261,6 +280,22 @@ This does not change the default application.
 
 Let the user choose a new default program for given files.
 
+=item B<-n>, B<--no-ask>
+
+Don't ask the user which program to use. Choose the default program or the 
+first program known to handle the file mimetype. This does not set the 
+default application.
+
+=item B<-L>, B<--dereference>
+
+Follow symbolic links.
+
+=item B<-M>, B<--magic-only>
+
+Do not check for extensions, globs or inode type, only look at the content
+of the file. This is particularly useful if for some reason you don't trust
+the name or the extension a file has.
+
 =item B<--database>=I<mimedir>:I<mimedir>:...
 
 Force the program to look in these directories for the shared mime-info
@@ -276,16 +311,6 @@ Print debug information about how the mimetype was determined.
 =item B<-u>, B<--usage>
 
 Print a help message and exits.
-
-=item B<-L>, B<--dereference>
-
-Follow symbolic links.
-
-=item B<-M>, B<--magic-only>
-
-Do not check for extensions, globs or inode type, only look at the content
-of the file. This is particularly useful if for some reason you don't trust
-the name or the extension a file has.
 
 =item B<-v>, B<--version>
 

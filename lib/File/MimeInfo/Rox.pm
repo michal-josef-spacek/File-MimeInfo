@@ -2,7 +2,7 @@ package File::MimeInfo::Rox;
 
 use strict;
 use Carp;
-use File::BaseDir qw/xdg_config_home xdg_data_dirs/;
+use File::BaseDir qw/config_home data_dirs/;
 use File::Spec;
 require Exporter;
 
@@ -10,11 +10,11 @@ our @ISA = qw(Exporter);
 our @EXPORT = qw(mime_exec mime_system);
 our @EXPORT_OK = qw(suggest_script_name);
 our %EXPORT_TAGS = (magic => \@EXPORT);
-our $VERSION = '0.2';
-our @choichespath = map File::Spec->catdir(@$_), (
-	[xdg_config_home(), 'rox.sourceforge.net'],
-	[$ENV{HOME}, 'Choices'],
-	(map [$_, 'Choices'], xdg_data_dirs())
+our $VERSION = '0.15';
+our @choicespath = (
+	config_home('rox.sourceforge.net'),
+	File::Spec->catdir($ENV{HOME}, 'Choices'),
+	data_dirs('Choices'),
 );
 our ($DEBUG);
 
@@ -55,7 +55,7 @@ sub _locate_script {
 	$mime =~ s#/#_#;
 	my @p = $ENV{CHOICESPATH} 
 		? split(/:/, $ENV{CHOICESPATH}) 
-		: (@choichespath);
+		: (@choicespath);
 	my $script;
 	for ( 
 		map("$_/MIME-types/$mime", @p),
@@ -76,7 +76,7 @@ sub suggest_script_name {
 	$m =~ s#/#_#;
 	my @p = $ENV{CHOICESPATH}
 		? split(/:/, $ENV{CHOICESPATH})
-		: (@choichespath);
+		: (@choicespath);
 	return "$p[0]/MIME-types", $m;
 }
 
@@ -167,7 +167,7 @@ Please mail the author when you encounter any bugs.
 
 Jaap Karssenberg || Pardus [Larus] E<lt>pardus@cpan.orgE<gt>
 
-Copyright (c) 2003 Jaap G Karssenberg. All rights reserved.
+Copyright (c) 2003,2008 Jaap G Karssenberg. All rights reserved.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 

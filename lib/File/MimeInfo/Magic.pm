@@ -4,7 +4,7 @@ package File::MimeInfo::Magic;
 use strict;
 use Carp;
 use Fcntl 'SEEK_SET';
-use File::BaseDir qw/xdg_data_files/;
+use File::BaseDir qw/data_files/;
 require File::MimeInfo;
 require Exporter;
 
@@ -18,19 +18,15 @@ BEGIN {
 our @ISA = qw(Exporter File::MimeInfo);
 our @EXPORT = qw(mimetype);
 our @EXPORT_OK = qw(extensions describe globs inodetype magic);
-our $VERSION = '0.14';
+our $VERSION = '0.15';
 our $DEBUG;
 
+our $_hashed = 0;
 our (@magic_80, @magic, $max_buffer);
 # @magic_80 and @magic are used to store the parse tree of magic data
 # @magic_80 contains magic rules with priority 80 and higher, @magic the rest
 # $max_buffer contains the maximum number of chars to be buffered from a non-seekable
 # filehandle in order to do magic mimetyping
-
-_rehash(); # initialize data
-
-# use Data::Dumper;
-# print Dumper \@magic_80, \@magic;
 
 sub mimetype {
 	my $file = pop; 
@@ -68,6 +64,7 @@ sub magic {
 
 sub _magic {
 	my ($file, @rules) = @_;
+	_rehash() unless $_hashed;
 	
 	my $fh;
 	unless (ref $file) {
@@ -90,48 +87,47 @@ sub _check_rule {
 	my ($ref, $fh, $lev) = @_;
 	my $line;
 
+	# Read
 	if (ref $fh eq 'GLOB') {
-		seek($fh, $$ref[1][0], SEEK_SET);
-		read($fh, $line, $$ref[1][1]);
+		seek($fh, $$ref[0], SEEK_SET);	# seek offset
+		read($fh, $line, $$ref[1]);	# read max length
 	}
 	else { # allowing for IO::Something
-		$fh->seek($$ref[1][0], SEEK_SET);
-		$fh->read($line, $$ref[1][1]);
+		$fh->seek($$ref[0], SEEK_SET);	# seek offset
+		$fh->read($line, $$ref[1]);	# read max length
 	}
-	return undef unless $line =~ $$ref[2];
-
-	my $succes;
-	unless ($$ref[3]) { $succes++ }
-	else { # mask stuff
-		my $v = $2 & $$ref[3][1];
-		$succes++ if $v eq $$ref[3][0];
-	}
+	
+	# Match regex
+	$line = unpack 'b*', $line if $$ref[2];	# unpack to bits if using mask
+	return undef unless $line =~ $$ref[3];	# match regex
 	print STDERR	'>', '>'x$lev, ' Value "', _escape_bytes($2),
-			'" at offset ', $$ref[1][0]+length($1),
-			" matches line $$ref[0]\n"
-		if $succes && $DEBUG;
+			'" at offset ', $$ref[1]+length($1),
+			" matches at $$ref[4]\n"
+		if $DEBUG;
+	return 1 unless $#$ref > 4;
 
-	return undef unless $succes;
-	if ($#$ref > 3) {
-		for (4..$#$ref) { # recurs
-			$succes = _check_rule($$ref[$_], $fh, $lev+1);
-			last if $succes;
-		}
+	# Check nested rules and recurs
+	for (5..$#$ref) {
+		return 1 if _check_rule($$ref[$_], $fh, $lev+1);
 	}
-	print STDERR "> Failed nested rules\n" if $DEBUG && !($lev || $succes);
-	return $succes;
+	print STDERR "> Failed nested rules\n" if $DEBUG && ! $lev;
+	return 0;
 }
 
 sub rehash { 
 	&File::MimeInfo::rehash();
 	&_rehash();
+	#use Data::Dumper;
+	#print Dumper \@magic_80, \@magic;
 }
 
 sub _rehash {
+	local $_; # limit scope of $_ ... :S
 	($max_buffer, @magic_80, @magic) = (32); # clear data
 	my @magicfiles = @File::MimeInfo::DIRS
-		? ( grep {-e $_ && -r $_} map "$_/magic", @File::MimeInfo::DIRS )
-		: ( reverse xdg_data_files('mime/magic')                        );
+		? ( grep {-e $_ && -r $_}
+			map "$_/magic", @File::MimeInfo::DIRS )
+		: ( reverse data_files('mime/magic') ) ;
 	my @done;
 	for my $file (@magicfiles) {
 		next if grep {$file eq $_} @done;
@@ -142,12 +138,14 @@ sub _rehash {
 	while ($magic[0][0] >= 80) {
 		push @magic_80, shift @magic;
 	}
+	$_hashed = 1;
 }
 
 sub _hash_magic {
 	my $file = shift;
 
-	open MAGIC, '<', $file || croak "Could not open file '$file' for reading";
+	open MAGIC, '<', $file
+		|| croak "Could not open file '$file' for reading";
 	binmode MAGIC;
 	<MAGIC> eq "MIME-Magic\x00\n"
 		or carp "Magic file '$file' doesn't seem to be a magic file";
@@ -160,8 +158,10 @@ sub _hash_magic {
 			next;
 		}
 
-		s/^(\d*)>(\d+)=(.{2})//s || carp "$file line $line skipped\n" && next;
-		my ($i, $o, $l) = ($1, $2, unpack 'n', $3); # indent, offset, value length
+		s/^(\d*)>(\d+)=(.{2})//s
+			|| warn "$file line $line skipped\n" && next;
+		my ($i, $o, $l) = ($1, $2, unpack 'n', $3);
+		                  # indent, offset, value length
 		while (length($_) <= $l) {
 			$_ .= <MAGIC>;
 			$line++;
@@ -170,37 +170,74 @@ sub _hash_magic {
 		my $v = substr $_, 0, $l, ''; # value
 
 		/^(?:&(.{$l}))?(?:~(\d+))?(?:\+(\d+))?\n$/s 
-			|| carp "$file line $line skipped\n" && next;
-		my ($m, $w, $r) = ($1, $2, $3 || 0); # mask, word size, range
-		# the word size is given for big endian to little endian conversion
-		# dunno whether we need to do that in perl
+			|| warn "$file line $line skipped\n" && next;
+		my ($m, $w, $r) = ($1, $2 || 1, $3 || 1);
+		                  # mask, word size, range
+		my $mdef = defined $m;
+		
+		# possible big endian to little endian conversion
+		# as a bonus perl also takes care of weird endian cases
+		if ( $w != 1 ) {
+			my ( $utpl, $ptpl );
+			if ( 2 == $w ) {
+				$v = pack 'S', unpack 'n', $v;
+				$m = pack 'S', unpack 'n', $m if $mdef;
+			}
+			elsif ( 4 == $w ) {
+				$v = pack 'L', unpack 'N', $v;
+				$m = pack 'L', unpack 'N', $m if $mdef;
+			}
+			else {
+				warn "Unsupported word size: $w octets ".
+				     " at $file line $line\n"
+			}
+		}
 
-		my $end = $o + $l + $r;
+		my $end = $o + $l + $r - 1;
 		$max_buffer = $end if $max_buffer < $end;
 		my $ref = $i ? _find_branch($i) : $magic[-1];
+		$r--;             # 1-based => 0-based range for regex
+		$r *= 8 if $mdef; # bytes => bits for matching a mask
 		my $reg = '^'
-			. ( $r ? "(.{0,$r}?)" : '()' )
-			. ( $m ? "(.{$l})" : '('.quotemeta($v).')' ) ;
+			. ( $r    ? "(.{0,$r}?)" : '()'           )
+			. ( $mdef ? '('. _mask_regex($v, $m) .')'  
+			          : '('. quotemeta($v)       .')' ) ;
 		push @$ref, [
-			$line,
-			[$o, $end],
-			qr/$reg/sm,
-			$m ? [$v, $m] : 0
+			$o, $end,    # offset, offset+length+range
+			$mdef,       # boolean for mask
+			qr/$reg/sm,  # the regex to match
+			undef	     # debug data
 		];
+		$$ref[-1][-1] = "$file line $line" if $DEBUG;
 	}
 	close MAGIC;
 }
 
-sub _find_branch {
+sub _find_branch { # finds last branch of tree of rules
 	my $i = shift;
 	my $ref = $magic[-1];
 	for (1..$i) { $ref = $$ref[-1] }
 	return $ref;
 }
 
-sub _escape_bytes {
+sub _mask_regex { # build regex based on mask
+	my ($v, $m) = @_;
+	my @v = split '', unpack "b*", $v;
+	my @m = split '', unpack "b*", $m;
+	my $re = '';
+	for (0 .. $#m) {
+		$re .= $m[$_] ? $v[$_] : '.' ;
+		# If $mask = 1 than ($input && $mask) will be same as $input
+		# If $mask = 0 than ($input && $mask) is always 0
+		# But $mask = 0 only makes sense if $value = 0
+		# So if $mask = 0 we ignore that bit of $input
+	}
+	return $re;
+}
+
+sub _escape_bytes { # used for debug output
 	my $string = shift;
-	if ($string =~ /[\x00-\x1F\xF7]/) {
+	if ($string =~ /[\x00-\x1F\x7F]/) {
 		$string = join '', map {
 			my $o = ord($_);
 			($o < 32)   ? '^' . chr($o + 64) :
@@ -228,6 +265,9 @@ File::MimeInfo::Magic - Determine file type with magic
 This module inherits from L<File::MimeInfo>, it is transparant
 to its functions but adds support for the freedesktop magic file.
 
+Magic data is hashed when you need it for the first time.
+If you want to force hashing earlier use the C<rehash()> function.
+
 =head1 EXPORT
 
 The method C<mimetype> is exported by default. The methods C<magic>, 
@@ -254,7 +294,7 @@ of the file match ascii control chars (white spaces excluded).
 If the file doesn't exist or isn't readable C<undef> is returned.
 
 If C<$file> is an object reference only C<magic> and the default method
-are used.
+are used. See below for details.
 
 =item C<magic($file)>
 
@@ -262,9 +302,11 @@ Returns a mime-type string for C<$file> based on the magic rules,
 returns undef on failure.
 
 C<$file> can be an object reference, in that case it is supposed to have a 
-C<seek()> and a C<read()> method. 
-This allows you for example to determine the mimetype of data in memory
-by using L<IO::Scalar>.
+C<seek()> and a C<read()> method. This allows you for example to determine
+the mimetype of data in memory by using L<IO::Scalar>.
+
+Be aware that when using a filehandle or an C<IO::> object you need to set
+the C<:utf8> binmode yourself if apropriate.
 
 =item C<rehash()>
 
@@ -275,26 +317,38 @@ If you want to by-pass the XDG basedir system you can specify your database
 directories by setting C<@File::MimeInfo::DIRS>. But normally it is better to
 change the XDG basedir environment variables.
 
+=item C<default>
+
+=item C<describe>
+
+=item C<extensions>
+
+=item C<globs>
+
+=item C<inodetype>
+
+These routines are imported from L<File::MimeInfo>.
+
 =back
 
 =head1 SEE ALSO
 
 L<File::MimeInfo>
 
+=head1 LIMITATIONS
+
+Only word sizes of 1, 2 or 4 are supported. Any other word size is ignored
+and will cause a warning.
+
 =head1 BUGS
 
 Please mail the author when you encounter any bugs.
-
-Most likely to cause bugs is the fact that I partially used line based parsing
-while the source data is binary and can contain newlines on strange places.
-I tested with the 0.11 version of the database and found no problems, but I
-can think of configurations that can cause problems.
 
 =head1 AUTHOR
 
 Jaap Karssenberg || Pardus [Larus] E<lt>pardus@cpan.orgE<gt>
 
-Copyright (c) 2003 Jaap G Karssenberg. All rights reserved.
+Copyright (c) 2003,2008 Jaap G Karssenberg. All rights reserved.
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
