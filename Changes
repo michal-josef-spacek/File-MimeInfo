@@ -3,8 +3,8 @@ Jaap Karssenberg <pardus@cpan.org>
 
 0.21
       - Up version to number > 0.2 from old File::MimeInfo::Rox. Fix automatic
-        instalations.
-      - 'transparant' -> 'transparent'.
+        instalations. (RT 39955)
+      - 'transparant' -> 'transparent'. (RT 39974)
       - Rewrite 'open || die' to better 'open or die'. (RT 41031)
 
 0.15  Wed Feb 13 2008
