@@ -127,7 +127,7 @@ $args{describe}++ if $args{'file-compat'} && !$args{mimetype};
 # --namefile
 if ($args{namefile}) {
 	open IN, $args{namefile} 
-		|| die "Couldn't open file: $args{namefile}\n";
+		or die "Couldn't open file: $args{namefile}\n";
 	unshift @ARGV, map {chomp; $_} (<IN>);
 	close IN;
 }

@@ -21,7 +21,7 @@ else {
 		my $type = $_;
 		$type =~ tr#_#/#;
 
-		open FILE, "t/magic/$_" || die $!;
+		open FILE, "t/magic/$_" or die $!;
 		my $file = join '', (<FILE>);
 		close FILE;
 		my $io = new IO::Scalar \$file;

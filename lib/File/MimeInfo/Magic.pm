@@ -68,7 +68,7 @@ sub _magic {
 	
 	my $fh;
 	unless (ref $file) {
-		open $fh, '<', $file || return undef;
+		open $fh, '<', $file or return undef;
 		binmode $fh;
 	}
 	else { $fh = $file }
@@ -145,7 +145,7 @@ sub _hash_magic {
 	my $file = shift;
 
 	open MAGIC, '<', $file
-		|| croak "Could not open file '$file' for reading";
+		or croak "Could not open file '$file' for reading";
 	binmode MAGIC;
 	<MAGIC> eq "MIME-Magic\x00\n"
 		or carp "Magic file '$file' doesn't seem to be a magic file";

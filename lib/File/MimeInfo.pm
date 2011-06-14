@@ -105,7 +105,7 @@ sub default {
 		print STDERR "> File exists, trying default method\n" if $DEBUG;
 		return 'text/plain' if -z $file;
 	
-		open FILE, '<', $file || return undef;
+		open FILE, '<', $file or return undef;
 		binmode FILE, ':utf8' unless $] < 5.008;
 		read FILE, $line, 32;
 		close FILE;
@@ -154,7 +154,7 @@ EOT
 
 sub _hash_globs {
 	my $file = shift;
-	open GLOB, '<', $file || croak "Could not open file '$file' for reading" ;
+	open GLOB, '<', $file or croak "Could not open file '$file' for reading" ;
 	binmode GLOB, ':utf8' unless $] < 5.008;
 	my ($string, $glob);
 	while (<GLOB>) {
@@ -200,7 +200,7 @@ sub describe {
 		: ( reverse data_files('mime', split '/', "$mt.xml") ) ;
 	for my $file (@descfiles) {
 		$desc = ''; # if a file was found, return at least empty string
-		open XML, '<', $file || croak "Could not open file '$file' for reading";
+		open XML, '<', $file or croak "Could not open file '$file' for reading";
 		binmode XML, ':utf8' unless $] < 5.008;
 		while (<XML>) {
 			next unless m!<comment\s*$att>(.*?)</comment>!;
@@ -233,7 +233,7 @@ sub _read_map_files {
 	my (@done, %map);
 	for my $file (@files) {
 		next if grep {$_ eq $file} @done;
-		open MAP, '<', $file || croak "Could not open file '$file' for reading";
+		open MAP, '<', $file or croak "Could not open file '$file' for reading";
 		binmode MAP, ':utf8' unless $] < 5.008;
 		while (<MAP>) {
 			next if /^\s*#/ or ! /\S/; # skip comments and empty lines
