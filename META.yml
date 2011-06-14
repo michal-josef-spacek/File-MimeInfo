@@ -1,6 +1,6 @@
 ---
 name: File-MimeInfo
-version: 0.15
+version: 0.21
 author:
   - 'Jaap Karssenberg <pardus@cpan.org>'
 abstract: Determine file type
@@ -17,16 +17,16 @@ requires:
 provides:
   File::MimeInfo:
     file: lib/File/MimeInfo.pm
-    version: 0.15
+    version: 0.21
   File::MimeInfo::Applications:
     file: lib/File/MimeInfo/Applications.pm
-    version: 0.15
+    version: 0.21
   File::MimeInfo::Magic:
     file: lib/File/MimeInfo/Magic.pm
-    version: 0.15
+    version: 0.21
   File::MimeInfo::Rox:
     file: lib/File/MimeInfo/Rox.pm
-    version: 0.15
+    version: 0.21
 generated_by: Module::Build version 0.2806
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.2.html

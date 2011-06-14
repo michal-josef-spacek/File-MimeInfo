@@ -1,6 +1,10 @@
 Revision history for Perl extension File::MimeInfo.
 Jaap Karssenberg <pardus@cpan.org>
 
+0.21
+      - Up version to number > 0.2 from old File::MimeInfo::Rox. Fix automatic
+        instalations.
+
 0.15  Wed Feb 13 2008
       A special thanks to Chapman Flack for bug reports and patches.
       - Added some empty pod declarations to satisfy Pod::Coverage (RT 33099)
